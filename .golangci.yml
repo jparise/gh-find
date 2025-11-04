@@ -1,0 +1,27 @@
+version: "2"
+linters:
+  enable:
+    - copyloopvar
+    - errname
+    - errorlint
+    - exhaustive
+    - goconst
+    - godot
+    - goprintffuncname
+    - iface
+    - intrange
+    - makezero
+    - nilerr
+    - prealloc
+    - thelper
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - wastedassign
+  exclusions:
+    presets:
+      - std-error-handling
+  settings:
+formatters:
+  enable:
+    - goimports
