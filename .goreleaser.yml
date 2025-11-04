@@ -38,5 +38,5 @@ release:
   prerelease: auto
 
 changelog:
-  use: github
+  use: github-native
   sort: asc
