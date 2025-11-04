@@ -55,8 +55,8 @@ gh find -e go -e md cli
 # Exclude test files
 gh find "*.js" -E "*.test.js" -E "*.spec.js" facebook/react
 
-# Find large files (over 1MB)
-gh find --min-size 1M "*.bin" cli
+# Find large files (over 50KB)
+gh find --min-size 50k "*.go" golang/go
 
 # Include forks and archives in search
 gh find --repo-types sources,forks,archives "*.md" torvalds
@@ -277,10 +277,10 @@ gh find -i "readme*" myorg
 gh find -p "**/*.ts" -E "**/node_modules/**" facebook/react
 ```
 
-### Find large Go files (over 1MB)
+### Find larger Go files (over 50KB)
 
 ```bash
-gh find --min-size 1M -e go golang/go
+gh find --min-size 50k -e go golang/go
 ```
 
 ### Find small configuration files (under 10KB)
@@ -289,10 +289,10 @@ gh find --min-size 1M -e go golang/go
 gh find --max-size 10k "*.json" -E "**/node_modules/**" cli
 ```
 
-### Find files in a size range (between 100KB and 500KB)
+### Find files in a size range (between 10KB and 100KB)
 
 ```bash
-gh find --min-size 100k --max-size 500k "*.js" facebook/react
+gh find --min-size 10k --max-size 100k "*.go" cli/cli
 ```
 
 ### Exclude test and spec files
