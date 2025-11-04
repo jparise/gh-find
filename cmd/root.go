@@ -92,12 +92,12 @@ Examples:
   gh find "*.go" cli
   gh find "*.go" cli/cli cli/go-gh
   gh find --repo-types sources,forks "*.md" torvalds
-  gh find "**/*.test.js" facebook/react
+  gh find -p "**/*_test.go" golang/go
   gh find "*" cli/cli cli/go-gh
   gh find -e go -e md cli
-  gh find --min-size 1M "*.bin" golang/go
+  gh find --min-size 50k "*.go" golang/go
   gh find "*.js" -E "*.test.js" -E "*.spec.js" facebook/react
-  gh find --min-size 100k --max-size 500k "*.json" cli`,
+  gh find --min-size 10k --max-size 100k "*.go" cli/cli`,
 	Version: version,
 	Args:    cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
