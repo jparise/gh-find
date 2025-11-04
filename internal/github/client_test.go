@@ -41,36 +41,40 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "default options",
 			opts: ClientOptions{
-				DisableCache: false,
+				AuthToken:    "fake-token",
 				CacheDir:     "",
 				CacheTTL:     24 * time.Hour,
+				DisableCache: false,
 			},
 			wantErr: false,
 		},
 		{
 			name: "cache disabled",
 			opts: ClientOptions{
-				DisableCache: true,
+				AuthToken:    "fake-token",
 				CacheDir:     "",
 				CacheTTL:     0,
+				DisableCache: true,
 			},
 			wantErr: false,
 		},
 		{
 			name: "custom cache directory",
 			opts: ClientOptions{
-				DisableCache: false,
+				AuthToken:    "fake-token",
 				CacheDir:     "/tmp/test-cache",
 				CacheTTL:     time.Hour,
+				DisableCache: false,
 			},
 			wantErr: false,
 		},
 		{
 			name: "custom cache TTL",
 			opts: ClientOptions{
-				DisableCache: false,
+				AuthToken:    "fake-token",
 				CacheDir:     "",
 				CacheTTL:     30 * time.Minute,
+				DisableCache: false,
 			},
 			wantErr: false,
 		},
@@ -252,7 +256,10 @@ func TestGetOwnerType(t *testing.T) {
 				Reply(tt.mockStatus).
 				JSON(tt.mockBody)
 
-			client, err := NewClient(ClientOptions{DisableCache: true})
+			client, err := NewClient(ClientOptions{
+				AuthToken:    "fake-token",
+				DisableCache: true,
+			})
 			if err != nil {
 				t.Fatalf("failed to create client: %v", err)
 			}
@@ -283,7 +290,10 @@ func TestGetOwnerType_ContextCanceled(t *testing.T) {
 		Reply(200).
 		JSON(`{"type": "User"}`)
 
-	client, err := NewClient(ClientOptions{DisableCache: true})
+	client, err := NewClient(ClientOptions{
+		AuthToken:    "fake-token",
+		DisableCache: true,
+	})
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -388,7 +398,10 @@ func TestListRepos(t *testing.T) {
 					JSON(pageBody)
 			}
 
-			client, err := NewClient(ClientOptions{DisableCache: true})
+			client, err := NewClient(ClientOptions{
+				AuthToken:    "fake-token",
+				DisableCache: true,
+			})
 			if err != nil {
 				t.Fatalf("failed to create client: %v", err)
 			}
@@ -463,7 +476,10 @@ func TestGetRepo(t *testing.T) {
 				Reply(tt.mockStatus).
 				JSON(tt.mockBody)
 
-			client, err := NewClient(ClientOptions{DisableCache: true})
+			client, err := NewClient(ClientOptions{
+				AuthToken:    "fake-token",
+				DisableCache: true,
+			})
 			if err != nil {
 				t.Fatalf("failed to create client: %v", err)
 			}
@@ -585,7 +601,10 @@ func TestGetTree(t *testing.T) {
 				Reply(tt.mockStatus).
 				JSON(tt.mockBody)
 
-			client, err := NewClient(ClientOptions{DisableCache: true})
+			client, err := NewClient(ClientOptions{
+				AuthToken:    "fake-token",
+				DisableCache: true,
+			})
 			if err != nil {
 				t.Fatalf("failed to create client: %v", err)
 			}
