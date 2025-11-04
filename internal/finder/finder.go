@@ -1,0 +1,295 @@
+package finder
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	"github.com/bmatcuk/doublestar/v4"
+	"github.com/jparise/gh-find/internal/github"
+	"golang.org/x/sync/semaphore"
+)
+
+// Finder orchestrates the file finding process.
+type Finder struct {
+	output *Output
+	client *github.Client
+}
+
+// New creates a new Finder.
+func New(stdout, stderr io.Writer, colorize bool) *Finder {
+	return &Finder{
+		output: NewOutput(stdout, stderr, colorize),
+	}
+}
+
+// Find executes the search based on the provided options.
+func (f *Finder) Find(ctx context.Context, opts *Options) error {
+	// Initialize GitHub client
+	client, err := github.NewClient(opts.ClientOpts)
+	if err != nil {
+		return err
+	}
+	f.client = client
+
+	// Get repositories to search from all repo specs
+	var allRepos []*github.Repository
+
+	for _, repoSpec := range opts.RepoSpecs {
+		// Parse repo spec
+		owner, repo, err := parseRepoSpec(repoSpec)
+		if err != nil {
+			f.output.Warningf("Invalid repo spec %q: %v", repoSpec, err)
+			continue
+		}
+
+		// Get repositories for this spec
+		var specRepos []*github.Repository
+		if repo != "" {
+			// Single repo
+			r, err := f.client.GetRepo(ctx, owner, repo)
+			if err != nil {
+				f.output.Warningf("Failed to fetch %s: %v", repoSpec, err)
+				continue
+			}
+			specRepos = []*github.Repository{r}
+		} else {
+			// All repos for user/org (API calls are cached by go-gh)
+			specRepos, err = f.client.ListRepos(ctx, owner, opts.RepoTypes)
+			if err != nil {
+				f.output.Warningf("Failed to list repos for %s: %v", owner, err)
+				continue
+			}
+		}
+
+		allRepos = append(allRepos, specRepos...)
+	}
+
+	// Deduplicate repos by full name (in case user specified same repo multiple times)
+	repoMap := make(map[string]*github.Repository)
+	for _, repo := range allRepos {
+		repoMap[repo.FullName] = repo
+	}
+	repos := make([]*github.Repository, 0, len(repoMap))
+	for _, repo := range repoMap {
+		repos = append(repos, repo)
+	}
+
+	// Apply additional client-side repo type filters
+	// (API does some filtering, but we need to handle archives, mirrors, and combinations)
+	filter := parseRepoTypes(opts.RepoTypes)
+	repos = filterRepos(repos, filter)
+
+	if len(repos) == 0 {
+		f.output.Infof("No repositories match the filter")
+		return nil
+	}
+
+	// Process repositories concurrently with bounded parallelism
+	var wg sync.WaitGroup
+	sem := semaphore.NewWeighted(int64(opts.Jobs))
+
+	for _, repo := range repos {
+		if err := sem.Acquire(ctx, 1); err != nil {
+			return err
+		}
+
+		wg.Add(1)
+		go func(repo *github.Repository) {
+			defer wg.Done()
+			defer sem.Release(1)
+
+			if err := f.searchRepo(ctx, repo, opts); err != nil {
+				f.output.Warningf("%s: %v", repo.FullName, err)
+			}
+		}(repo)
+	}
+
+	wg.Wait()
+	return nil
+}
+
+func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *Options) error {
+	// Fetch tree (API call is cached by go-gh)
+	tree, err := f.client.GetTree(ctx, repo)
+	if err != nil {
+		return err
+	}
+
+	// Warn if truncated
+	if tree.Truncated {
+		f.output.Warningf("%s has >100k files, results incomplete", repo.FullName)
+	}
+
+	// Match files
+	for _, entry := range tree.Tree {
+		// Skip directories for now (only match files)
+		if entry.Type != "blob" {
+			continue
+		}
+
+		// Apply extension filter
+		if len(opts.Extensions) > 0 {
+			if !hasExtension(entry.Path, opts.Extensions) {
+				continue
+			}
+		}
+
+		// Apply size filter
+		if opts.MinSize > 0 && entry.Size < opts.MinSize {
+			continue
+		}
+		if opts.MaxSize > 0 && entry.Size > opts.MaxSize {
+			continue
+		}
+
+		// Apply pattern matching
+		matchPath := entry.Path
+		if !opts.FullPath {
+			matchPath = filepath.Base(entry.Path)
+		}
+
+		matched, err := matchPattern(opts.Pattern, matchPath, opts.IgnoreCase)
+		if err != nil {
+			return fmt.Errorf("pattern %q failed to match path %q: %w", opts.Pattern, entry.Path, err)
+		}
+
+		if matched {
+			// Apply exclude patterns
+			excluded := false
+			for _, excludePattern := range opts.Excludes {
+				// Use same path logic as main pattern
+				excludePath := matchPath
+
+				isExcluded, err := matchPattern(excludePattern, excludePath, opts.IgnoreCase)
+				if err != nil {
+					return fmt.Errorf("exclude pattern %q failed to match path %q: %w",
+						excludePattern, entry.Path, err)
+				}
+				if isExcluded {
+					excluded = true
+					break
+				}
+			}
+
+			if !excluded {
+				f.output.Match(repo.Owner, repo.Name, entry.Path)
+			}
+		}
+	}
+
+	return nil
+}
+
+// parseRepoSpec parses "owner" or "owner/repo" format.
+func parseRepoSpec(spec string) (owner, repo string, err error) {
+	parts := strings.Split(spec, "/")
+	switch len(parts) {
+	case 1:
+		return parts[0], "", nil
+	case 2:
+		return parts[0], parts[1], nil
+	default:
+		return "", "", fmt.Errorf("invalid repo spec: %s (expected username or username/repo)", spec)
+	}
+}
+
+// parseRepoTypes converts repo types slice to filter.
+func parseRepoTypes(types []github.RepoType) *RepoFilter {
+	filter := &RepoFilter{
+		IncludeSources:  false,
+		IncludeForks:    false,
+		IncludeArchived: false,
+		IncludeMirrored: false,
+	}
+
+	for _, t := range types {
+		switch t {
+		case github.RepoTypeAll:
+			filter.IncludeSources = true
+			filter.IncludeForks = true
+			filter.IncludeArchived = true
+			filter.IncludeMirrored = true
+			return filter
+		case github.RepoTypeSources:
+			filter.IncludeSources = true
+		case github.RepoTypeForks:
+			filter.IncludeForks = true
+		case github.RepoTypeArchives:
+			filter.IncludeArchived = true
+		case github.RepoTypeMirrors:
+			filter.IncludeMirrored = true
+		}
+		// No default case needed - values already validated in cmd
+	}
+
+	return filter
+}
+
+// filterRepos applies the repo type filter.
+func filterRepos(repos []*github.Repository, filter *RepoFilter) []*github.Repository {
+	var filtered []*github.Repository
+	for _, repo := range repos {
+		if shouldIncludeRepo(repo, filter) {
+			filtered = append(filtered, repo)
+		}
+	}
+	return filtered
+}
+
+func shouldIncludeRepo(repo *github.Repository, filter *RepoFilter) bool {
+	// Step 1: Determine primary type (fork/mirror/source - mostly mutually exclusive)
+	var primaryOK bool
+	if repo.Fork {
+		primaryOK = filter.IncludeForks
+	} else if repo.MirrorURL != "" {
+		primaryOK = filter.IncludeMirrored
+	} else {
+		primaryOK = filter.IncludeSources
+	}
+
+	// If primary type excluded, repo is excluded
+	if !primaryOK {
+		return false
+	}
+
+	// Step 2: Check archived status (independent attribute)
+	// If repo is archived but archives not requested, exclude
+	if repo.Archived && !filter.IncludeArchived {
+		return false
+	}
+
+	return true
+}
+
+// matchPattern matches a path against a glob pattern.
+func matchPattern(pattern, path string, ignoreCase bool) (bool, error) {
+	if ignoreCase {
+		pattern = strings.ToLower(pattern)
+		path = strings.ToLower(path)
+	}
+
+	return doublestar.Match(pattern, path)
+}
+
+// hasExtension checks if a path has one of the specified extensions.
+func hasExtension(path string, extensions []string) bool {
+	ext := filepath.Ext(path)
+	if ext != "" && ext[0] == '.' {
+		ext = ext[1:] // Remove leading dot
+	}
+
+	for _, e := range extensions {
+		// Remove leading dot if present
+		if e != "" && e[0] == '.' {
+			e = e[1:]
+		}
+		if ext == e {
+			return true
+		}
+	}
+	return false
+}

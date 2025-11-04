@@ -1,0 +1,39 @@
+name: Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ["1.25"]
+
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-go@v6
+      with:
+        go-version: ${{ matrix.go }}
+
+    - name: Download dependencies
+      run: |
+        go mod download
+        go mod tidy -v
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v8
+      with:
+        version: latest
+        only-new-issues: true
+
+    - name: Run tests
+      run: go test -v ./...
+
+    - name: Run tests (race detector)
+      if: matrix.go == '1.25'
+      run: go test -race ./...
