@@ -19,9 +19,10 @@ const (
 
 // ClientOptions configures the GitHub API client.
 type ClientOptions struct {
-	DisableCache bool
+	AuthToken    string
 	CacheDir     string
 	CacheTTL     time.Duration
+	DisableCache bool
 }
 
 // Client wraps the go-gh REST client.
@@ -32,11 +33,10 @@ type Client struct {
 // NewClient creates a new GitHub API client with the given options.
 func NewClient(opts ClientOptions) (*Client, error) {
 	apiOpts := api.ClientOptions{
-		EnableCache: !opts.DisableCache,
+		AuthToken:   opts.AuthToken,
+		CacheDir:    opts.CacheDir,
 		CacheTTL:    opts.CacheTTL,
-	}
-	if opts.CacheDir != "" {
-		apiOpts.CacheDir = opts.CacheDir
+		EnableCache: !opts.DisableCache,
 	}
 
 	rest, err := api.NewRESTClient(apiOpts)
