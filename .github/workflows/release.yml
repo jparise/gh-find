@@ -5,16 +5,21 @@ on:
       - "v*"
 permissions:
   contents: write
-  id-token: write
-  attestations: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: cli/gh-extension-precompile@v2
         with:
-          generate_attestations: true
-          go_version_file: go.mod
-          go_build_options: '-ldflags="-w -s -X github.com/jparise/gh-find/cmd.version=${{ github.ref_name }}"'
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
