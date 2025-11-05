@@ -2,7 +2,7 @@
 
 > A `find(1)`-like utility for GitHub repositories
 
-`gh-find` is a fast, user-friendly alternative to navigating GitHub's web interface when searching for files across repositories. Like `fd` is to `find`, `gh-find` brings intuitive glob patterns, sensible defaults, and fast concurrent searches to GitHub repositories.
+`gh-find` is a fast, user-friendly way to search for files across GitHub repositories. It supports intuitive glob patterns, multiple filtering options, and sensible defaults.
 
 ## Features
 
