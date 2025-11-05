@@ -213,12 +213,11 @@ func parseByteSize(s string) (int64, error) {
 	return int64(result), nil
 }
 
-func run(cmd *cobra.Command, args []string) error {
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	var pattern string
-	var repoSpecs []string
+// parseArgs parses command-line arguments into a pattern and repository specs.
+func parseArgs(args []string) (pattern string, repoSpecs []string, err error) {
+	if len(args) == 0 {
+		return "", nil, fmt.Errorf("at least one repository is required")
+	}
 
 	// Single arg: it's a repo (pattern defaults to "*")
 	// Multiple args: first is pattern, rest are repos
@@ -228,13 +227,24 @@ func run(cmd *cobra.Command, args []string) error {
 	} else {
 		pattern = args[0]
 		repoSpecs = args[1:]
+
+		if pattern == "" {
+			pattern = "*"
+		}
 	}
 
-	if len(repoSpecs) == 0 {
-		return fmt.Errorf("at least one repository is required after pattern")
+	return pattern, repoSpecs, nil
+}
+
+func run(cmd *cobra.Command, args []string) error {
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	pattern, repoSpecs, err := parseArgs(args)
+	if err != nil {
+		return err
 	}
 
-	// Resolve color mode to bool
 	var colorize bool
 	switch color {
 	case colorAlways:
