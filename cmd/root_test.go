@@ -75,6 +75,90 @@ func TestColorMode(t *testing.T) {
 	}
 }
 
+func TestParseArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantPattern string
+		wantRepos   []string
+		wantErr     bool
+	}{
+		{
+			name:    "no args",
+			args:    []string{},
+			wantErr: true,
+		},
+		{
+			name:        "single repo",
+			args:        []string{"cli/cli"},
+			wantPattern: "*",
+			wantRepos:   []string{"cli/cli"},
+			wantErr:     false,
+		},
+		{
+			name:        "explicit pattern with single repo",
+			args:        []string{"*.go", "cli/cli"},
+			wantPattern: "*.go",
+			wantRepos:   []string{"cli/cli"},
+			wantErr:     false,
+		},
+		{
+			name:        "explicit pattern with multiple repos",
+			args:        []string{"*.go", "cli/cli", "cli/go-gh"},
+			wantPattern: "*.go",
+			wantRepos:   []string{"cli/cli", "cli/go-gh"},
+			wantErr:     false,
+		},
+		{
+			name:        "empty pattern with single repo",
+			args:        []string{"", "cli/cli"},
+			wantPattern: "*",
+			wantRepos:   []string{"cli/cli"},
+			wantErr:     false,
+		},
+		{
+			name:        "empty pattern with multiple repos",
+			args:        []string{"", "cli/cli", "cli/go-gh"},
+			wantPattern: "*",
+			wantRepos:   []string{"cli/cli", "cli/go-gh"},
+			wantErr:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pattern, repos, err := parseArgs(tt.args)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("parseArgs(%v) expected error, got nil", tt.args)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("parseArgs(%v) unexpected error: %v", tt.args, err)
+				return
+			}
+
+			if pattern != tt.wantPattern {
+				t.Errorf("parseArgs(%v) pattern = %q, want %q", tt.args, pattern, tt.wantPattern)
+			}
+
+			if len(repos) != len(tt.wantRepos) {
+				t.Errorf("parseArgs(%v) repos = %v, want %v", tt.args, repos, tt.wantRepos)
+				return
+			}
+
+			for i, repo := range repos {
+				if repo != tt.wantRepos[i] {
+					t.Errorf("parseArgs(%v) repos[%d] = %q, want %q", tt.args, i, repo, tt.wantRepos[i])
+				}
+			}
+		})
+	}
+}
+
 func TestParseByteSize(t *testing.T) {
 	tests := []struct {
 		name    string
