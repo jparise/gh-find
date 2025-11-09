@@ -10,6 +10,7 @@
 - **Concurrent search**: Search multiple repositories in parallel with configurable concurrency
 - **Smart caching**: Automatic response caching reduces API calls and respects rate limits
 - **Repository filtering**: Search across sources, forks, archives, and mirrors
+- **File type filtering**: Filter by file, directory, symlink, executable, or submodule with `-t/--type`
 - **Extension filtering**: Quick filtering by file extension with `-e/--extension`
 - **Case-insensitive matching**: Optional case-insensitive pattern matching with `-i`
 - **Full-path matching**: Match against full file paths with `-p`, not just basenames
@@ -51,6 +52,9 @@ gh find -p "**/*_test.go" golang/go
 
 # Filter by file extension
 gh find -e go -e md cli
+
+# Filter by file type (files only, no directories)
+gh find -t f "README*" cli
 
 # Exclude test files
 gh find "*.js" -E "*.test.js" -E "*.spec.js" facebook/react
@@ -119,6 +123,9 @@ Glob patterns support:
 #### Pattern Matching
 - `-i, --ignore-case` - Case-insensitive pattern matching
 - `-p, --full-path` - Match pattern against full path instead of basename
+- `-t, --type TYPE` - Filter by file type (can be specified multiple times for OR matching)
+  - Valid types: `f`/`file`, `d`/`dir`/`directory`, `l`/`symlink`, `x`/`executable`, `s`/`submodule`
+  - Examples: `-t f` (files only), `-t f -t d` (files or directories)
 - `-e, --extension EXT` - Filter by file extension (can be specified multiple times)
 - `-E, --exclude PATTERN` - Exclude files matching pattern (can be specified multiple times)
 - `--min-size SIZE` - Minimum file size (e.g., `1M`, `500k`, `1GB`)
@@ -263,6 +270,30 @@ Rate limit exceeded (0/5000). Resets at 14:23 (in 45m).
 
 ```bash
 gh find -p "**/*_test.go" golang/go kubernetes/kubernetes
+```
+
+### Find only files (exclude directories) with README in the name
+
+```bash
+gh find -t f -i "readme*" myorg
+```
+
+### Find executable scripts
+
+```bash
+gh find -t x "*.sh" cli/cli
+```
+
+### Find symlinks in a repository
+
+```bash
+gh find -t l "*" torvalds/linux
+```
+
+### Find directories matching a pattern
+
+```bash
+gh find -t d "test*" golang/go
 ```
 
 ### Find README files (case-insensitive) in all repos for an org

@@ -7,6 +7,7 @@ type Options struct {
 	Pattern    string
 	RepoSpecs  []string          // "owner" or "owner/repo", can be multiple
 	RepoTypes  []github.RepoType // Repository types to include
+	FileTypes  []github.FileType // File types to include (OR matching)
 	IgnoreCase bool
 	FullPath   bool
 	Extensions []string

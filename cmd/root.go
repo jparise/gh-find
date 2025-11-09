@@ -48,12 +48,53 @@ func (c *colorMode) Type() string {
 	return "colorMode"
 }
 
+// fileTypes represents the --type flag value.
+type fileTypesFlag []github.FileType
+
+// String is used both by fmt.Print and by Cobra in help text.
+func (f *fileTypesFlag) String() string {
+	if f == nil || len(*f) == 0 {
+		return ""
+	}
+	strs := make([]string, len(*f))
+	for i, ft := range *f {
+		strs[i] = string(ft)
+	}
+	return strings.Join(strs, ",")
+}
+
+// Set must have pointer receiver to validate and set the value.
+// Called once per flag occurrence, so -t f -t d calls Set twice.
+func (f *fileTypesFlag) Set(v string) error {
+	switch v {
+	case "f", "file":
+		*f = append(*f, github.FileTypeFile)
+	case "d", "dir", "directory":
+		*f = append(*f, github.FileTypeDirectory)
+	case "l", "symlink":
+		*f = append(*f, github.FileTypeSymlink)
+	case "x", "executable":
+		*f = append(*f, github.FileTypeExecutable)
+	case "s", "submodule":
+		*f = append(*f, github.FileTypeSubmodule)
+	default:
+		return fmt.Errorf("must be one of f, file, d, dir, directory, l, symlink, x, executable, s, submodule")
+	}
+	return nil
+}
+
+// Type is only used in help text.
+func (f *fileTypesFlag) Type() string {
+	return "filetype"
+}
+
 var (
 	version = "dev"
 
 	// Flags.
 	color      = colorAuto
 	repoTypes  []string
+	fileTypes  fileTypesFlag
 	ignoreCase bool
 	fullPath   bool
 	extensions []string
@@ -132,6 +173,8 @@ Examples:
 func init() {
 	rootCmd.Flags().StringSliceVar(&repoTypes, "repo-types", []string{"sources"},
 		"repo types to include: sources,forks,archives,mirrors,all")
+	rootCmd.Flags().VarP(&fileTypes, "type", "t",
+		"filter by file type: f/file, d/dir/directory, l/symlink, x/executable, s/submodule")
 	rootCmd.Flags().Var(&color, "color",
 		"colorize output: auto, always, never")
 	rootCmd.Flags().BoolVarP(&ignoreCase, "ignore-case", "i", false,
@@ -297,6 +340,7 @@ func run(cmd *cobra.Command, args []string) error {
 		Pattern:    pattern,
 		RepoSpecs:  repoSpecs,
 		RepoTypes:  repoTypesTyped,
+		FileTypes:  []github.FileType(fileTypes),
 		IgnoreCase: ignoreCase,
 		FullPath:   fullPath,
 		Extensions: extensions,
