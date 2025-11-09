@@ -19,15 +19,11 @@ type Repository struct {
 type TreeEntry struct {
 	Path string `json:"path"`
 	Mode string `json:"mode"`
-	SHA  string `json:"sha"`
 	Size int64  `json:"size"`
-	URL  string `json:"url"`
 }
 
 // TreeResponse represents the GitHub API tree response.
 type TreeResponse struct {
-	SHA       string      `json:"sha"`
-	URL       string      `json:"url"`
 	Tree      []TreeEntry `json:"tree"`
 	Truncated bool        `json:"truncated"`
 }
