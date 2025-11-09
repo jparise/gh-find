@@ -132,10 +132,10 @@ Glob patterns support:
 - `--max-size SIZE` - Maximum file size (e.g., `5M`, `1GB`)
 
 #### Repository Filtering
-- `--repo-types TYPE[,TYPE...]` - Repository types to include (default: `sources`)
+- `--repo-types TYPE[,TYPE...]` - Repository types to include when expanding owners (default: `sources`)
   - Valid types: `sources`, `forks`, `archives`, `mirrors`, `all`
-  - Cannot combine `all` with other types
-  - Archives are independent (you can have archived forks)
+  - Only filters owner expansion (e.g., `cli`). Does NOT filter explicitly specified repos (e.g., `cli/archived-fork`)
+  - See [Repository Filtering](#repository-filtering-1) for details
 
 #### Performance
 - `-j, --jobs N` - Maximum concurrent API requests (default: 10)
@@ -152,23 +152,22 @@ Glob patterns support:
 
 ## Repository Filtering
 
-By default, `gh-find` only searches **source repositories** (excludes forks, archives, and mirrors). Use `--repo-types` to customize:
+By default, `gh-find` only searches **source repositories** (excludes forks, archives, and mirrors).
 
 ```bash
-# Only forks
-gh find --repo-types forks "*.md" octocat
+# Include forks and archives
+gh find --repo-types sources,forks,archives "*.go" cli
 
-# Sources and forks
-gh find --repo-types sources,forks "*.go" cli
-
-# Everything including archives
+# Everything
 gh find --repo-types all "*.js" facebook
-
-# Only archived repositories
-gh find --repo-types archives "*.py" myorg
 ```
 
-**Note**: Archives are an independent attribute. A repository can be both a fork and archived, so `--repo-types forks,archives` will find both regular forks and archived forks.
+**Important**: `--repo-types` only filters owner expansion (e.g., `cli` → all repos in cli org). Explicitly specified repos (e.g., `cli/archived-fork`) are always included:
+
+```bash
+# Includes cli/archived-fork even with --repo-types sources
+gh find --repo-types sources cli cli/archived-fork
+```
 
 ## Caching
 

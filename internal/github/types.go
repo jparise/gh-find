@@ -1,5 +1,9 @@
 package github
 
+import (
+	"strings"
+)
+
 // Repository represents a GitHub repository.
 type Repository struct {
 	Owner         string
@@ -36,8 +40,55 @@ const (
 	RepoTypeForks    RepoType = "forks"
 	RepoTypeArchives RepoType = "archives"
 	RepoTypeMirrors  RepoType = "mirrors"
-	RepoTypeAll      RepoType = "all"
 )
+
+// ValidRepoTypes is the list of valid repository type values.
+var ValidRepoTypes = []string{
+	string(RepoTypeSources),
+	string(RepoTypeForks),
+	string(RepoTypeArchives),
+	string(RepoTypeMirrors),
+}
+
+// RepoTypes represents a set of repository types to include.
+type RepoTypes struct {
+	Sources  bool
+	Forks    bool
+	Archives bool
+	Mirrors  bool
+}
+
+// All returns a RepoTypes with all types enabled.
+func (r RepoTypes) All() RepoTypes {
+	return RepoTypes{
+		Sources:  true,
+		Forks:    true,
+		Archives: true,
+		Mirrors:  true,
+	}
+}
+
+func (r RepoTypes) String() string {
+	if r.Sources && r.Forks && r.Archives && r.Mirrors {
+		return "all"
+	}
+
+	var types []string
+	if r.Sources {
+		types = append(types, string(RepoTypeSources))
+	}
+	if r.Forks {
+		types = append(types, string(RepoTypeForks))
+	}
+	if r.Archives {
+		types = append(types, string(RepoTypeArchives))
+	}
+	if r.Mirrors {
+		types = append(types, string(RepoTypeMirrors))
+	}
+
+	return strings.Join(types, ",")
+}
 
 // FileType represents a file type classification.
 type FileType string

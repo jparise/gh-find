@@ -79,11 +79,6 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 		repos = append(repos, repo)
 	}
 
-	// Apply additional client-side repo type filters
-	// (API does some filtering, but we need to handle archives, mirrors, and combinations)
-	filter := parseRepoTypes(opts.RepoTypes)
-	repos = filterRepos(repos, filter)
-
 	if len(repos) == 0 {
 		f.output.Infof("No repositories match the filter")
 		return nil
@@ -198,74 +193,6 @@ func parseRepoSpec(spec string) (owner, repo string, err error) {
 	default:
 		return "", "", fmt.Errorf("invalid repo spec: %s (expected username or username/repo)", spec)
 	}
-}
-
-// parseRepoTypes converts repo types slice to filter.
-func parseRepoTypes(types []github.RepoType) *RepoFilter {
-	filter := &RepoFilter{
-		IncludeSources:  false,
-		IncludeForks:    false,
-		IncludeArchived: false,
-		IncludeMirrored: false,
-	}
-
-	for _, t := range types {
-		switch t {
-		case github.RepoTypeAll:
-			filter.IncludeSources = true
-			filter.IncludeForks = true
-			filter.IncludeArchived = true
-			filter.IncludeMirrored = true
-			return filter
-		case github.RepoTypeSources:
-			filter.IncludeSources = true
-		case github.RepoTypeForks:
-			filter.IncludeForks = true
-		case github.RepoTypeArchives:
-			filter.IncludeArchived = true
-		case github.RepoTypeMirrors:
-			filter.IncludeMirrored = true
-		}
-		// No default case needed - values already validated in cmd
-	}
-
-	return filter
-}
-
-// filterRepos applies the repo type filter.
-func filterRepos(repos []*github.Repository, filter *RepoFilter) []*github.Repository {
-	var filtered []*github.Repository
-	for _, repo := range repos {
-		if shouldIncludeRepo(repo, filter) {
-			filtered = append(filtered, repo)
-		}
-	}
-	return filtered
-}
-
-func shouldIncludeRepo(repo *github.Repository, filter *RepoFilter) bool {
-	// Step 1: Determine primary type (fork/mirror/source - mostly mutually exclusive)
-	var primaryOK bool
-	if repo.Fork {
-		primaryOK = filter.IncludeForks
-	} else if repo.MirrorURL != "" {
-		primaryOK = filter.IncludeMirrored
-	} else {
-		primaryOK = filter.IncludeSources
-	}
-
-	// If primary type excluded, repo is excluded
-	if !primaryOK {
-		return false
-	}
-
-	// Step 2: Check archived status (independent attribute)
-	// If repo is archived but archives not requested, exclude
-	if repo.Archived && !filter.IncludeArchived {
-		return false
-	}
-
-	return true
 }
 
 // matchPattern matches a path against a glob pattern.

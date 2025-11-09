@@ -5,8 +5,8 @@ import "github.com/jparise/gh-find/internal/github"
 // Options contains all search parameters.
 type Options struct {
 	Pattern    string
-	RepoSpecs  []string          // "owner" or "owner/repo", can be multiple
-	RepoTypes  []github.RepoType // Repository types to include
+	RepoSpecs  []string          // "owner" or "owner/repo"
+	RepoTypes  github.RepoTypes  // Repository types to include
 	FileTypes  []github.FileType // File types to include (OR matching)
 	IgnoreCase bool
 	FullPath   bool
@@ -16,12 +16,4 @@ type Options struct {
 	MaxSize    int64    // Maximum file size in bytes (0 = no maximum)
 	ClientOpts github.ClientOptions
 	Jobs       int // Maximum concurrent API requests
-}
-
-// RepoFilter determines which types of repos to include.
-type RepoFilter struct {
-	IncludeSources  bool
-	IncludeForks    bool
-	IncludeArchived bool
-	IncludeMirrored bool
 }

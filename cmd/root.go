@@ -5,7 +5,6 @@ import (
 	"math"
 	"os"
 	"os/signal"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -88,12 +87,57 @@ func (f *fileTypesFlag) Type() string {
 	return "filetype"
 }
 
+type repoTypesFlag github.RepoTypes
+
+func (f *repoTypesFlag) String() string {
+	if f == nil {
+		return string(github.RepoTypeSources)
+	}
+
+	return github.RepoTypes(*f).String()
+}
+
+func (f *repoTypesFlag) Set(v string) error {
+	parts := strings.SplitSeq(v, ",")
+
+	for part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		if part == "all" {
+			*f = repoTypesFlag(github.RepoTypes{}.All())
+			return nil
+		}
+
+		switch github.RepoType(part) {
+		case github.RepoTypeSources:
+			f.Sources = true
+		case github.RepoTypeForks:
+			f.Forks = true
+		case github.RepoTypeArchives:
+			f.Archives = true
+		case github.RepoTypeMirrors:
+			f.Mirrors = true
+		default:
+			return fmt.Errorf("invalid repo type %q: must be one of %s, or all", part, strings.Join(github.ValidRepoTypes, ", "))
+		}
+	}
+
+	return nil
+}
+
+func (f *repoTypesFlag) Type() string {
+	return "types"
+}
+
 var (
 	version = "dev"
 
 	// Flags.
 	color      = colorAuto
-	repoTypes  []string
+	repoTypes  = repoTypesFlag{Sources: true}
 	fileTypes  fileTypesFlag
 	ignoreCase bool
 	fullPath   bool
@@ -145,34 +189,14 @@ Examples:
 		if jobs < 1 || jobs > 100 {
 			return fmt.Errorf("--jobs must be between 1 and 100, got %d", jobs)
 		}
-
-		// Validate --repo-types values
-		for _, rt := range repoTypes {
-			switch rt {
-			case string(github.RepoTypeSources),
-				string(github.RepoTypeForks),
-				string(github.RepoTypeArchives),
-				string(github.RepoTypeMirrors),
-				string(github.RepoTypeAll):
-				// Valid
-			default:
-				return fmt.Errorf("invalid repo type %q: must be one of sources, forks, archives, mirrors, or all", rt)
-			}
-		}
-
-		// Don't allow mixing "all" with other types
-		if len(repoTypes) > 1 && slices.Contains(repoTypes, string(github.RepoTypeAll)) {
-			return fmt.Errorf("repo type \"all\" cannot be combined with other types")
-		}
-
 		return nil
 	},
 	RunE: run,
 }
 
 func init() {
-	rootCmd.Flags().StringSliceVar(&repoTypes, "repo-types", []string{"sources"},
-		"repo types to include: sources,forks,archives,mirrors,all")
+	rootCmd.Flags().Var(&repoTypes, "repo-types",
+		"repo types to include when expanding owners (sources,forks,archives,mirrors,all)")
 	rootCmd.Flags().VarP(&fileTypes, "type", "t",
 		"filter by file type: f/file, d/dir/directory, l/symlink, x/executable, s/submodule")
 	rootCmd.Flags().Var(&color, "color",
@@ -299,12 +323,6 @@ func run(cmd *cobra.Command, args []string) error {
 		colorize = terminal.IsColorEnabled()
 	}
 
-	// Convert validated strings to typed constants
-	repoTypesTyped := make([]github.RepoType, len(repoTypes))
-	for i, s := range repoTypes {
-		repoTypesTyped[i] = github.RepoType(s)
-	}
-
 	// Parse size filters
 	var minSizeBytes, maxSizeBytes int64
 
@@ -339,7 +357,7 @@ func run(cmd *cobra.Command, args []string) error {
 	opts := &finder.Options{
 		Pattern:    pattern,
 		RepoSpecs:  repoSpecs,
-		RepoTypes:  repoTypesTyped,
+		RepoTypes:  github.RepoTypes(repoTypes),
 		FileTypes:  []github.FileType(fileTypes),
 		IgnoreCase: ignoreCase,
 		FullPath:   fullPath,

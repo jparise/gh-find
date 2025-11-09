@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"reflect"
 	"testing"
+
+	"github.com/jparise/gh-find/internal/github"
 )
 
 func TestColorMode(t *testing.T) {
@@ -70,6 +73,68 @@ func TestColorMode(t *testing.T) {
 			// Test Type() method
 			if c.Type() != "colorMode" {
 				t.Errorf("colorMode.Type() = %q, want %q", c.Type(), "colorMode")
+			}
+		})
+	}
+}
+
+func TestRepoTypes(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+		want    github.RepoTypes
+	}{
+		{
+			name:    "single type",
+			value:   "sources",
+			wantErr: false,
+			want:    github.RepoTypes{Sources: true},
+		},
+		{
+			name:    "CSV",
+			value:   "sources,forks",
+			wantErr: false,
+			want:    github.RepoTypes{Sources: true, Forks: true},
+		},
+		{
+			name:    "all (single)",
+			value:   "all",
+			wantErr: false,
+			want:    github.RepoTypes{}.All(),
+		},
+		{
+			name:    "all (mixed)",
+			value:   "all,sources",
+			wantErr: false,
+			want:    github.RepoTypes{}.All(),
+		},
+		{
+			name:    "invalid type",
+			value:   "invalid",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var f repoTypesFlag
+			err := f.Set(tt.value)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("repoTypesFlag.Set(%q) expected error, got nil", tt.value)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("repoTypesFlag.Set(%q) unexpected error: %v", tt.value, err)
+				return
+			}
+
+			if !reflect.DeepEqual(github.RepoTypes(f), tt.want) {
+				t.Errorf("repoTypesFlag.Set(%q) = %v, want %v", tt.value, f, tt.want)
 			}
 		})
 	}
