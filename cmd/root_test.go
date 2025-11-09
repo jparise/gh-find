@@ -7,30 +7,30 @@ import (
 	"github.com/jparise/gh-find/internal/github"
 )
 
-func TestColorMode(t *testing.T) {
+func TestOutputMode(t *testing.T) {
 	tests := []struct {
 		name    string
 		value   string
 		wantErr bool
-		want    colorMode
+		want    outputMode
 	}{
 		{
 			name:    "auto",
 			value:   "auto",
 			wantErr: false,
-			want:    colorAuto,
+			want:    outputAuto,
 		},
 		{
 			name:    "always",
 			value:   "always",
 			wantErr: false,
-			want:    colorAlways,
+			want:    outputAlways,
 		},
 		{
 			name:    "never",
 			value:   "never",
 			wantErr: false,
-			want:    colorNever,
+			want:    outputNever,
 		},
 		{
 			name:    "invalid value",
@@ -46,23 +46,23 @@ func TestColorMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var c colorMode
-			err := c.Set(tt.value)
+			var m outputMode
+			err := m.Set(tt.value)
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("colorMode.Set(%q) expected error, got nil", tt.value)
+					t.Errorf("outputMode.Set(%q) expected error, got nil", tt.value)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Errorf("colorMode.Set(%q) unexpected error: %v", tt.value, err)
+				t.Errorf("outputMode.Set(%q) unexpected error: %v", tt.value, err)
 				return
 			}
 
-			if c != tt.want {
-				t.Errorf("colorMode.Set(%q) = %v, want %v", tt.value, c, tt.want)
+			if m != tt.want {
+				t.Errorf("outputMode.Set(%q) = %v, want %v", tt.value, m, tt.want)
 			}
 		})
 	}

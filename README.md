@@ -147,8 +147,10 @@ Glob patterns support:
 - `--cache-dir PATH` - Override cache directory (default: `~/.cache/gh/`)
 - `--cache-ttl DURATION` - Cache time-to-live (default: 24h, e.g., `1h`, `30m`)
 
-#### Other
+#### Output
 - `-c, --color MODE` - Colorize output: `auto`, `always`, `never` (default: `auto`)
+- `--hyperlink MODE` - Hyperlink output: `auto`, `always`, `never` (default: `auto`)
+  - `auto` only enables hyperlinks when color is also enabled
 
 ## Repository Filtering
 

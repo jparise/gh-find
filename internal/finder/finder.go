@@ -21,9 +21,9 @@ type Finder struct {
 }
 
 // New creates a new Finder.
-func New(stdout, stderr io.Writer, colorize bool) *Finder {
+func New(stdout, stderr io.Writer, colorize, hyperlinks bool) *Finder {
 	return &Finder{
-		output: NewOutput(stdout, stderr, colorize),
+		output: NewOutput(stdout, stderr, colorize, hyperlinks),
 	}
 }
 
@@ -167,7 +167,7 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 			}
 
 			if !excluded {
-				f.output.Match(repo.Owner, repo.Name, entry.Path)
+				f.output.Match(repo.Owner, repo.Name, repo.DefaultBranch, entry.Path)
 			}
 		}
 	}

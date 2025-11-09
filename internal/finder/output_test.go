@@ -9,16 +9,24 @@ import (
 
 func TestNewOutput(t *testing.T) {
 	tests := []struct {
-		name     string
-		colorize bool
+		name       string
+		colorize   bool
+		hyperlinks bool
 	}{
 		{
-			name:     "with colors",
-			colorize: true,
+			name:       "with colors and hyperlinks",
+			colorize:   true,
+			hyperlinks: true,
 		},
 		{
-			name:     "without colors",
-			colorize: false,
+			name:       "with colors only",
+			colorize:   true,
+			hyperlinks: false,
+		},
+		{
+			name:       "without colors or hyperlinks",
+			colorize:   false,
+			hyperlinks: false,
 		},
 	}
 
@@ -27,7 +35,7 @@ func TestNewOutput(t *testing.T) {
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
 
-			output := NewOutput(stdout, stderr, tt.colorize)
+			output := NewOutput(stdout, stderr, tt.colorize, tt.hyperlinks)
 			colorFuncs := []struct {
 				name string
 				fn   func(string) string
@@ -59,18 +67,43 @@ func TestNewOutput(t *testing.T) {
 
 func TestMatch(t *testing.T) {
 	tests := []struct {
-		name  string
-		owner string
-		repo  string
-		path  string
-		want  string
+		name       string
+		owner      string
+		repo       string
+		branch     string
+		path       string
+		hyperlinks bool
+		want       string
+		wantURL    string
 	}{
 		{
-			name:  "simple match",
-			owner: "cli",
-			repo:  "cli",
-			path:  "main.go",
-			want:  "cli/cli:main.go",
+			name:       "simple match without hyperlinks",
+			owner:      "cli",
+			repo:       "cli",
+			branch:     "trunk",
+			path:       "main.go",
+			hyperlinks: false,
+			want:       "cli/cli:main.go",
+		},
+		{
+			name:       "match with hyperlinks",
+			owner:      "cli",
+			repo:       "cli",
+			branch:     "trunk",
+			path:       "main.go",
+			hyperlinks: true,
+			want:       "cli/cli:main.go",
+			wantURL:    "https://github.com/cli/cli/blob/trunk/main.go",
+		},
+		{
+			name:       "nested path with hyperlinks",
+			owner:      "golang",
+			repo:       "go",
+			branch:     "master",
+			path:       "src/cmd/go/main.go",
+			hyperlinks: true,
+			want:       "golang/go:src/cmd/go/main.go",
+			wantURL:    "https://github.com/golang/go/blob/master/src/cmd/go/main.go",
 		},
 	}
 
@@ -78,13 +111,18 @@ func TestMatch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			output := NewOutput(stdout, stderr, false)
 
-			output.Match(tt.owner, tt.repo, tt.path)
+			output := NewOutput(stdout, stderr, false, tt.hyperlinks)
+
+			output.Match(tt.owner, tt.repo, tt.branch, tt.path)
 			got := stdout.String()
 
 			if !strings.Contains(got, tt.want) {
 				t.Errorf("Match() output = %q, want to contain %q", got, tt.want)
+			}
+
+			if tt.hyperlinks && !strings.Contains(got, tt.wantURL) {
+				t.Errorf("Match() output = %q, want to contain URL %q", got, tt.wantURL)
 			}
 
 			if stderr.Len() != 0 {
@@ -118,7 +156,7 @@ func TestWarningf(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			output := NewOutput(stdout, stderr, false)
+			output := NewOutput(stdout, stderr, false, false)
 
 			output.Warningf(tt.format, tt.args...)
 			got := stderr.String()
@@ -158,7 +196,7 @@ func TestInfof(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			output := NewOutput(stdout, stderr, false)
+			output := NewOutput(stdout, stderr, false, false)
 
 			output.Infof(tt.format, tt.args...)
 			got := stderr.String()
@@ -177,7 +215,7 @@ func TestInfof(t *testing.T) {
 func TestOutputThreadSafety(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	output := NewOutput(stdout, stderr, false)
+	output := NewOutput(stdout, stderr, false, false)
 
 	const numGoroutines = 10
 	const numCalls = 100
@@ -189,7 +227,7 @@ func TestOutputThreadSafety(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range numCalls {
-				output.Match("owner", "repo", "file.go")
+				output.Match("owner", "repo", "main", "file.go")
 			}
 		}()
 		go func() {
