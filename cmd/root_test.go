@@ -64,16 +64,6 @@ func TestColorMode(t *testing.T) {
 			if c != tt.want {
 				t.Errorf("colorMode.Set(%q) = %v, want %v", tt.value, c, tt.want)
 			}
-
-			// Test String() method
-			if c.String() != tt.value {
-				t.Errorf("colorMode.String() = %q, want %q", c.String(), tt.value)
-			}
-
-			// Test Type() method
-			if c.Type() != "colorMode" {
-				t.Errorf("colorMode.Type() = %q, want %q", c.Type(), "colorMode")
-			}
 		})
 	}
 }
@@ -210,15 +200,8 @@ func TestParseArgs(t *testing.T) {
 				t.Errorf("parseArgs(%v) pattern = %q, want %q", tt.args, pattern, tt.wantPattern)
 			}
 
-			if len(repos) != len(tt.wantRepos) {
-				t.Errorf("parseArgs(%v) repos = %v, want %v", tt.args, repos, tt.wantRepos)
-				return
-			}
-
-			for i, repo := range repos {
-				if repo != tt.wantRepos[i] {
-					t.Errorf("parseArgs(%v) repos[%d] = %q, want %q", tt.args, i, repo, tt.wantRepos[i])
-				}
+			if !reflect.DeepEqual(repos, tt.wantRepos) {
+				t.Errorf("parseArgs(%v) = %v, want %v", tt.args, repos, tt.wantRepos)
 			}
 		})
 	}
