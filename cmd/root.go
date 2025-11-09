@@ -26,12 +26,10 @@ const (
 	colorNever  colorMode = "never"
 )
 
-// String is used both by fmt.Print and by Cobra in help text.
 func (c *colorMode) String() string {
 	return string(*c)
 }
 
-// Set must have pointer receiver to validate and set the value.
 func (c *colorMode) Set(v string) error {
 	switch v {
 	case "auto", "always", "never":
@@ -42,15 +40,12 @@ func (c *colorMode) Set(v string) error {
 	}
 }
 
-// Type is only used in help text.
 func (c *colorMode) Type() string {
-	return "colorMode"
+	return "mode"
 }
 
-// fileTypes represents the --type flag value.
 type fileTypesFlag []github.FileType
 
-// String is used both by fmt.Print and by Cobra in help text.
 func (f *fileTypesFlag) String() string {
 	if f == nil || len(*f) == 0 {
 		return ""
@@ -62,8 +57,6 @@ func (f *fileTypesFlag) String() string {
 	return strings.Join(strs, ",")
 }
 
-// Set must have pointer receiver to validate and set the value.
-// Called once per flag occurrence, so -t f -t d calls Set twice.
 func (f *fileTypesFlag) Set(v string) error {
 	switch v {
 	case "f", "file":
@@ -82,7 +75,6 @@ func (f *fileTypesFlag) Set(v string) error {
 	return nil
 }
 
-// Type is only used in help text.
 func (f *fileTypesFlag) Type() string {
 	return "filetype"
 }
@@ -135,7 +127,6 @@ func (f *repoTypesFlag) Type() string {
 var (
 	version = "dev"
 
-	// Flags.
 	color      = colorAuto
 	repoTypes  = repoTypesFlag{Sources: true}
 	fileTypes  fileTypesFlag
@@ -176,7 +167,6 @@ You can specify multiple repositories to search across them all.
 Examples:
   gh find "*.go" cli
   gh find "*.go" cli/cli cli/go-gh
-  gh find --repo-types sources,forks "*.md" torvalds
   gh find -p "**/*_test.go" golang/go
   gh find "*" cli/cli cli/go-gh
   gh find -e go -e md cli
@@ -195,16 +185,17 @@ Examples:
 }
 
 func init() {
-	rootCmd.Flags().Var(&repoTypes, "repo-types",
-		"repo types to include when expanding owners (sources,forks,archives,mirrors,all)")
-	rootCmd.Flags().VarP(&fileTypes, "type", "t",
-		"filter by file type: f/file, d/dir/directory, l/symlink, x/executable, s/submodule")
-	rootCmd.Flags().Var(&color, "color",
-		"colorize output: auto, always, never")
+	rootCmd.Flags().SortFlags = false
+
+	// Pattern matching
 	rootCmd.Flags().BoolVarP(&ignoreCase, "ignore-case", "i", false,
 		"case-insensitive pattern matching")
 	rootCmd.Flags().BoolVarP(&fullPath, "full-path", "p", false,
-		"match pattern against full path (default: basename only)")
+		"match pattern against full path")
+
+	// File filtering
+	rootCmd.Flags().VarP(&fileTypes, "type", "t",
+		"filter by file type: f/file, d/dir/directory, l/symlink, x/executable, s/submodule")
 	rootCmd.Flags().StringSliceVarP(&extensions, "extension", "e", []string{},
 		"filter by file extension (can be specified multiple times)")
 	rootCmd.Flags().StringSliceVarP(&excludes, "exclude", "E", []string{},
@@ -213,14 +204,24 @@ func init() {
 		"minimum file size (e.g., 1M, 500k, 1GB)")
 	rootCmd.Flags().StringVar(&maxSize, "max-size", "",
 		"maximum file size (e.g., 5M, 1GB)")
+
+	// Repository selection
+	rootCmd.Flags().Var(&repoTypes, "repo-types",
+		"repo types when expanding owners (sources,forks,archives,mirrors,all)")
+
+	// Output control
+	rootCmd.Flags().VarP(&color, "color", "c",
+		"colorize output: auto, always, never")
+
+	// Performance & caching
+	rootCmd.Flags().IntVarP(&jobs, "jobs", "j", 10,
+		"maximum concurrent API requests")
 	rootCmd.Flags().BoolVar(&noCache, "no-cache", false,
 		"bypass cache, always fetch fresh data")
 	rootCmd.Flags().StringVar(&cacheDir, "cache-dir", "",
 		"override cache directory location")
 	rootCmd.Flags().DurationVar(&cacheTTL, "cache-ttl", 24*time.Hour,
 		"cache time-to-live (e.g., 1h, 30m, 24h)")
-	rootCmd.Flags().IntVarP(&jobs, "jobs", "j", 10,
-		"maximum concurrent API requests")
 }
 
 func Execute() error {

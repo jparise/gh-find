@@ -148,7 +148,7 @@ Glob patterns support:
 - `--cache-ttl DURATION` - Cache time-to-live (default: 24h, e.g., `1h`, `30m`)
 
 #### Other
-- `--color MODE` - Colorize output: `auto`, `always`, `never` (default: `auto`)
+- `-c, --color MODE` - Colorize output: `auto`, `always`, `never` (default: `auto`)
 
 ## Repository Filtering
 
