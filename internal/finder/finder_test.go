@@ -186,6 +186,133 @@ func TestMatchPattern(t *testing.T) {
 	}
 }
 
+func TestMatchesFileType(t *testing.T) {
+	tests := []struct {
+		name  string
+		entry *github.TreeEntry
+		types []github.FileType
+		want  bool
+	}{
+		{
+			name: "file matches file type",
+			entry: &github.TreeEntry{
+				Mode: "100644",
+				Path: "main.go",
+			},
+			types: []github.FileType{github.FileTypeFile},
+			want:  true,
+		},
+		{
+			name: "executable matches executable type",
+			entry: &github.TreeEntry{
+				Mode: "100755",
+				Path: "build.sh",
+			},
+			types: []github.FileType{github.FileTypeExecutable},
+			want:  true,
+		},
+		{
+			name: "symlink matches symlink type",
+			entry: &github.TreeEntry{
+				Mode: "120000",
+				Path: "link",
+			},
+			types: []github.FileType{github.FileTypeSymlink},
+			want:  true,
+		},
+		{
+			name: "directory matches directory type",
+			entry: &github.TreeEntry{
+				Mode: "040000",
+				Path: "src",
+			},
+			types: []github.FileType{github.FileTypeDirectory},
+			want:  true,
+		},
+		{
+			name: "file does not match directory type",
+			entry: &github.TreeEntry{
+				Mode: "100644",
+				Path: "main.go",
+			},
+			types: []github.FileType{github.FileTypeDirectory},
+			want:  false,
+		},
+		{
+			name: "file matches in multiple types (OR logic)",
+			entry: &github.TreeEntry{
+				Mode: "100644",
+				Path: "main.go",
+			},
+			types: []github.FileType{github.FileTypeDirectory, github.FileTypeFile},
+			want:  true,
+		},
+		{
+			name: "executable matches in multiple types (OR logic)",
+			entry: &github.TreeEntry{
+				Mode: "100755",
+				Path: "script.sh",
+			},
+			types: []github.FileType{github.FileTypeFile, github.FileTypeExecutable},
+			want:  true,
+		},
+		{
+			name: "file does not match when type not in list",
+			entry: &github.TreeEntry{
+				Mode: "100644",
+				Path: "main.go",
+			},
+			types: []github.FileType{github.FileTypeDirectory, github.FileTypeSymlink},
+			want:  false,
+		},
+		{
+			name: "group-writable file matches file type",
+			entry: &github.TreeEntry{
+				Mode: "100664",
+				Path: "data.txt",
+			},
+			types: []github.FileType{github.FileTypeFile},
+			want:  true,
+		},
+		{
+			name: "submodule matches submodule type",
+			entry: &github.TreeEntry{
+				Mode: "160000",
+				Path: "vendor/lib",
+			},
+			types: []github.FileType{github.FileTypeSubmodule},
+			want:  true,
+		},
+		{
+			name: "submodule does not match file type",
+			entry: &github.TreeEntry{
+				Mode: "160000",
+				Path: "vendor/lib",
+			},
+			types: []github.FileType{github.FileTypeFile},
+			want:  false,
+		},
+		{
+			name: "empty types list returns false",
+			entry: &github.TreeEntry{
+				Mode: "100644",
+				Path: "main.go",
+			},
+			types: []github.FileType{},
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchesFileType(tt.entry, tt.types)
+			if got != tt.want {
+				t.Errorf("matchesType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHasExtension(t *testing.T) {
 	tests := []struct {
 		name       string

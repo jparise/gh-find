@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -126,9 +127,11 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 
 	// Match files
 	for _, entry := range tree.Tree {
-		// Skip directories for now (only match files)
-		if entry.Type != "blob" {
-			continue
+		// Apply type filter
+		if len(opts.FileTypes) > 0 {
+			if !matchesFileType(&entry, opts.FileTypes) {
+				continue
+			}
 		}
 
 		// Apply extension filter
@@ -292,4 +295,10 @@ func hasExtension(path string, extensions []string) bool {
 		}
 	}
 	return false
+}
+
+// matchesFileType checks if an entry matches any of the specified file types (OR logic).
+func matchesFileType(entry *github.TreeEntry, fileTypes []github.FileType) bool {
+	fileType := github.ParseFileType(entry.Mode)
+	return slices.Contains(fileTypes, fileType)
 }
