@@ -1,3 +1,4 @@
+// Package cmd implements the command-line interface for gh-find.
 package cmd
 
 import (
@@ -227,6 +228,7 @@ func init() {
 		"cache time-to-live (e.g., 1h, 30m, 24h)")
 }
 
+// Execute runs the root command.
 func Execute() error {
 	return rootCmd.Execute()
 }

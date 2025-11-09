@@ -32,10 +32,14 @@ type TreeResponse struct {
 type RepoType string
 
 const (
-	RepoTypeSources  RepoType = "sources"
-	RepoTypeForks    RepoType = "forks"
+	// RepoTypeSources represents source repositories (non-forks).
+	RepoTypeSources RepoType = "sources"
+	// RepoTypeForks represents forked repositories.
+	RepoTypeForks RepoType = "forks"
+	// RepoTypeArchives represents archived repositories.
 	RepoTypeArchives RepoType = "archives"
-	RepoTypeMirrors  RepoType = "mirrors"
+	// RepoTypeMirrors represents mirrored repositories.
+	RepoTypeMirrors RepoType = "mirrors"
 )
 
 // ValidRepoTypes is the list of valid repository type values.
@@ -90,17 +94,22 @@ func (r RepoTypes) String() string {
 type FileType string
 
 const (
-	FileTypeFile       FileType = "file"
-	FileTypeDirectory  FileType = "directory"
-	FileTypeSymlink    FileType = "symlink"
+	// FileTypeFile represents a regular file.
+	FileTypeFile FileType = "file"
+	// FileTypeDirectory represents a directory.
+	FileTypeDirectory FileType = "directory"
+	// FileTypeSymlink represents a symbolic link.
+	FileTypeSymlink FileType = "symlink"
+	// FileTypeExecutable represents an executable file.
 	FileTypeExecutable FileType = "executable"
-	FileTypeSubmodule  FileType = "submodule"
+	// FileTypeSubmodule represents a Git submodule.
+	FileTypeSubmodule FileType = "submodule"
 )
 
 // ParseFileType returns the file type based on Git mode.
 func ParseFileType(mode string) FileType {
 	// Simply switch on the string values rather than converting them to their
-	// numeric represenation of mode flags. The GitHub API only returns valid
+	// numeric representation of mode flags. The GitHub API only returns valid
 	// mode strings so this should be quick and reliable.
 	switch mode {
 	case "040000":

@@ -22,6 +22,7 @@ func generateRepoPage(owner string, startNum, count int) string {
 	repos := make([]string, count)
 	for i := range count {
 		repoNum := startNum + i
+		//nolint:gocritic // JSON template requires literal quoted strings
 		repos[i] = fmt.Sprintf(`{"name": "repo%d", "full_name": "%s/repo%d", "owner": {"login": "%s"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""}`,
 			repoNum, owner, repoNum, owner)
 	}

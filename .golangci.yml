@@ -6,13 +6,16 @@ linters:
     - errorlint
     - exhaustive
     - goconst
+    - gocritic
     - godot
     - goprintffuncname
     - iface
     - intrange
     - makezero
+    - misspell
     - nilerr
     - prealloc
+    - revive
     - thelper
     - unconvert
     - unparam
@@ -21,6 +24,18 @@ linters:
   exclusions:
     presets:
       - std-error-handling
+    rules:
+      - linters:
+          - revive
+        text: "unused-parameter"
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - hugeParam
 formatters:
   enable:
     - goimports

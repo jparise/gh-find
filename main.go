@@ -1,3 +1,4 @@
+// gh-find is a find(1)-like utility for discovering files across GitHub repositories.
 package main
 
 import (

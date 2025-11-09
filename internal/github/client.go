@@ -1,3 +1,4 @@
+// Package github provides GitHub API client functionality for gh-find.
 package github
 
 import (
@@ -12,9 +13,12 @@ import (
 type OwnerType string
 
 const (
-	OwnerTypeUser         OwnerType = "User"
+	// OwnerTypeUser represents a user account.
+	OwnerTypeUser OwnerType = "User"
+	// OwnerTypeOrganization represents an organization account.
 	OwnerTypeOrganization OwnerType = "Organization"
-	pageSize                        = 100
+
+	pageSize = 100
 )
 
 // ClientOptions configures the GitHub API client.
@@ -140,11 +144,12 @@ func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([
 		}
 
 		var shouldInclude bool
-		if repo.Fork {
+		switch {
+		case repo.Fork:
 			shouldInclude = types.Forks
-		} else if repo.MirrorURL != "" {
+		case repo.MirrorURL != "":
 			shouldInclude = types.Mirrors
-		} else {
+		default:
 			shouldInclude = types.Sources
 		}
 		if shouldInclude {
