@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -98,20 +99,20 @@ func TestNewClient(t *testing.T) {
 func TestMapRepoTypes(t *testing.T) {
 	tests := []struct {
 		name      string
-		repoTypes []RepoType
+		repoTypes RepoTypes
 		ownerType OwnerType
 		want      string
 	}{
 		// Sources
 		{
 			name:      "sources for user",
-			repoTypes: []RepoType{RepoTypeSources},
+			repoTypes: RepoTypes{Sources: true},
 			ownerType: OwnerTypeUser,
 			want:      "owner",
 		},
 		{
 			name:      "sources for organization",
-			repoTypes: []RepoType{RepoTypeSources},
+			repoTypes: RepoTypes{Sources: true},
 			ownerType: OwnerTypeOrganization,
 			want:      "sources",
 		},
@@ -119,27 +120,27 @@ func TestMapRepoTypes(t *testing.T) {
 		// Forks
 		{
 			name:      "forks for user (not supported)",
-			repoTypes: []RepoType{RepoTypeForks},
+			repoTypes: RepoTypes{Forks: true},
 			ownerType: OwnerTypeUser,
 			want:      "all",
 		},
 		{
 			name:      "forks for organization",
-			repoTypes: []RepoType{RepoTypeForks},
+			repoTypes: RepoTypes{Forks: true},
 			ownerType: OwnerTypeOrganization,
 			want:      "forks",
 		},
 
 		// All
 		{
-			name:      "all for user",
-			repoTypes: []RepoType{RepoTypeAll},
+			name:      "all for user (empty struct)",
+			repoTypes: RepoTypes{},
 			ownerType: OwnerTypeUser,
 			want:      "all",
 		},
 		{
-			name:      "all for organization",
-			repoTypes: []RepoType{RepoTypeAll},
+			name:      "all for organization (empty struct)",
+			repoTypes: RepoTypes{},
 			ownerType: OwnerTypeOrganization,
 			want:      "all",
 		},
@@ -147,13 +148,13 @@ func TestMapRepoTypes(t *testing.T) {
 		// Archives (not supported by API)
 		{
 			name:      "archives for user (not supported)",
-			repoTypes: []RepoType{RepoTypeArchives},
+			repoTypes: RepoTypes{Archives: true},
 			ownerType: OwnerTypeUser,
 			want:      "all",
 		},
 		{
 			name:      "archives for organization (not supported)",
-			repoTypes: []RepoType{RepoTypeArchives},
+			repoTypes: RepoTypes{Archives: true},
 			ownerType: OwnerTypeOrganization,
 			want:      "all",
 		},
@@ -161,13 +162,13 @@ func TestMapRepoTypes(t *testing.T) {
 		// Mirrors (not supported by API)
 		{
 			name:      "mirrors for user (not supported)",
-			repoTypes: []RepoType{RepoTypeMirrors},
+			repoTypes: RepoTypes{Mirrors: true},
 			ownerType: OwnerTypeUser,
 			want:      "all",
 		},
 		{
 			name:      "mirrors for organization (not supported)",
-			repoTypes: []RepoType{RepoTypeMirrors},
+			repoTypes: RepoTypes{Mirrors: true},
 			ownerType: OwnerTypeOrganization,
 			want:      "all",
 		},
@@ -175,21 +176,21 @@ func TestMapRepoTypes(t *testing.T) {
 		// Multiple types (fallback to all)
 		{
 			name:      "multiple types for user",
-			repoTypes: []RepoType{RepoTypeSources, RepoTypeForks},
+			repoTypes: RepoTypes{Sources: true, Forks: true},
 			ownerType: OwnerTypeUser,
 			want:      "all",
 		},
 		{
 			name:      "multiple types for organization",
-			repoTypes: []RepoType{RepoTypeSources, RepoTypeForks},
+			repoTypes: RepoTypes{Sources: true, Forks: true},
 			ownerType: OwnerTypeOrganization,
 			want:      "all",
 		},
 
-		// Empty slice
+		// Empty struct
 		{
 			name:      "empty repo types",
-			repoTypes: []RepoType{},
+			repoTypes: RepoTypes{},
 			ownerType: OwnerTypeUser,
 			want:      "all",
 		},
@@ -307,21 +308,22 @@ func TestGetOwnerType_ContextCanceled(t *testing.T) {
 	}
 }
 
-// TestListRepos tests repository listing with pagination.
+// TestListRepos tests repository listing with pagination and filtering.
 func TestListRepos(t *testing.T) {
 	tests := []struct {
 		name          string
 		username      string
-		repoTypes     []RepoType
+		repoTypes     RepoTypes
 		mockOwnerType string
 		mockPages     []string // JSON for each page
 		wantRepoCount int
+		wantRepoNames []string // Optional: check specific repo names
 		wantErr       bool
 	}{
 		{
 			name:          "user with partial page",
 			username:      "octocat",
-			repoTypes:     []RepoType{RepoTypeAll},
+			repoTypes:     RepoTypes{Sources: true}, // Default: sources only
 			mockOwnerType: "User",
 			mockPages: []string{
 				// Only 1 repo (less than 100) - pagination stops after this
@@ -333,7 +335,7 @@ func TestListRepos(t *testing.T) {
 		{
 			name:          "organization with partial page",
 			username:      "github",
-			repoTypes:     []RepoType{RepoTypeAll},
+			repoTypes:     RepoTypes{Sources: true}, // Default: sources only
 			mockOwnerType: "Organization",
 			mockPages: []string{
 				// Only 1 repo (less than 100) - pagination stops after this
@@ -345,7 +347,7 @@ func TestListRepos(t *testing.T) {
 		{
 			name:          "empty result",
 			username:      "emptyuser",
-			repoTypes:     []RepoType{RepoTypeAll},
+			repoTypes:     RepoTypes{Sources: true}, // Default: sources only
 			mockOwnerType: "User",
 			mockPages: []string{
 				`[]`,
@@ -356,7 +358,7 @@ func TestListRepos(t *testing.T) {
 		{
 			name:          "full page triggers pagination",
 			username:      "manyrepos",
-			repoTypes:     []RepoType{RepoTypeAll},
+			repoTypes:     RepoTypes{Sources: true}, // Default: sources only
 			mockOwnerType: "User",
 			mockPages: []string{
 				// First page: exactly pageSize repos (full page)
@@ -365,6 +367,134 @@ func TestListRepos(t *testing.T) {
 				`[{"name": "repo101", "full_name": "manyrepos/repo101", "owner": {"login": "manyrepos"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""}]`,
 			},
 			wantRepoCount: pageSize + 1,
+			wantErr:       false,
+		},
+		{
+			name:          "filter sources only - excludes forks and mirrors",
+			username:      "filtertest",
+			repoTypes:     RepoTypes{Sources: true},
+			mockOwnerType: "User",
+			mockPages: []string{
+				`[
+					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
+				]`,
+			},
+			wantRepoCount: 1,
+			wantRepoNames: []string{"source-repo"},
+			wantErr:       false,
+		},
+		{
+			name:          "filter forks only - excludes sources and mirrors",
+			username:      "filtertest",
+			repoTypes:     RepoTypes{Forks: true},
+			mockOwnerType: "User",
+			mockPages: []string{
+				`[
+					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
+				]`,
+			},
+			wantRepoCount: 1,
+			wantRepoNames: []string{"fork-repo"},
+			wantErr:       false,
+		},
+		{
+			name:          "filter mirrors only - excludes sources and forks",
+			username:      "filtertest",
+			repoTypes:     RepoTypes{Mirrors: true},
+			mockOwnerType: "User",
+			mockPages: []string{
+				`[
+					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
+				]`,
+			},
+			wantRepoCount: 1,
+			wantRepoNames: []string{"mirror-repo"},
+			wantErr:       false,
+		},
+		{
+			name:          "filter sources with archives - includes archived sources",
+			username:      "filtertest",
+			repoTypes:     RepoTypes{Sources: true, Archives: true},
+			mockOwnerType: "User",
+			mockPages: []string{
+				`[
+					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": true, "mirror_url": ""},
+					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": true, "mirror_url": ""}
+				]`,
+			},
+			wantRepoCount: 2,
+			wantRepoNames: []string{"active-source", "archived-source"},
+			wantErr:       false,
+		},
+		{
+			name:          "filter sources without archives - excludes archived sources",
+			username:      "filtertest",
+			repoTypes:     RepoTypes{Sources: true},
+			mockOwnerType: "User",
+			mockPages: []string{
+				`[
+					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": true, "mirror_url": ""}
+				]`,
+			},
+			wantRepoCount: 1,
+			wantRepoNames: []string{"active-source"},
+			wantErr:       false,
+		},
+		{
+			name:          "filter forks with archives - includes archived forks",
+			username:      "filtertest",
+			repoTypes:     RepoTypes{Forks: true, Archives: true},
+			mockOwnerType: "User",
+			mockPages: []string{
+				`[
+					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": true, "mirror_url": ""}
+				]`,
+			},
+			wantRepoCount: 2,
+			wantRepoNames: []string{"active-fork", "archived-fork"},
+			wantErr:       false,
+		},
+		{
+			name:          "filter sources and forks without archives - excludes archived repos",
+			username:      "filtertest",
+			repoTypes:     RepoTypes{Sources: true, Forks: true},
+			mockOwnerType: "User",
+			mockPages: []string{
+				`[
+					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": true, "mirror_url": ""},
+					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": true, "mirror_url": ""}
+				]`,
+			},
+			wantRepoCount: 2,
+			wantRepoNames: []string{"active-source", "active-fork"},
+			wantErr:       false,
+		},
+		{
+			name:          "empty repo types - returns nothing",
+			username:      "filtertest",
+			repoTypes:     RepoTypes{},
+			mockOwnerType: "User",
+			mockPages: []string{
+				`[
+					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""}
+				]`,
+			},
+			wantRepoCount: 0,
+			wantRepoNames: nil,
 			wantErr:       false,
 		},
 	}
@@ -414,6 +544,26 @@ func TestListRepos(t *testing.T) {
 
 			if !tt.wantErr && len(repos) != tt.wantRepoCount {
 				t.Errorf("ListRepos() returned %d repos, want %d", len(repos), tt.wantRepoCount)
+			}
+
+			// If specific repo names are provided, verify them
+			if !tt.wantErr && len(tt.wantRepoNames) > 0 {
+				gotNames := make(map[string]bool)
+				for _, repo := range repos {
+					gotNames[repo.Name] = true
+				}
+
+				for _, wantName := range tt.wantRepoNames {
+					if !gotNames[wantName] {
+						t.Errorf("ListRepos() missing expected repo: %s", wantName)
+					}
+				}
+
+				for gotName := range gotNames {
+					if !slices.Contains(tt.wantRepoNames, gotName) {
+						t.Errorf("ListRepos() returned unexpected repo: %s", gotName)
+					}
+				}
 			}
 
 			if !gock.IsDone() {

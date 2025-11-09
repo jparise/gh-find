@@ -66,7 +66,7 @@ func (c *Client) GetOwnerType(ctx context.Context, name string) (OwnerType, erro
 
 // ListRepos returns all repositories for a user or organization with pagination.
 // It detects whether the name is a user or org and uses the appropriate endpoint.
-func (c *Client) ListRepos(ctx context.Context, name string, repoTypes []RepoType) ([]*Repository, error) {
+func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([]*Repository, error) {
 	// Detect if this is a user or organization
 	accountType, err := c.GetOwnerType(ctx, name)
 	if err != nil {
@@ -85,8 +85,7 @@ func (c *Client) ListRepos(ctx context.Context, name string, repoTypes []RepoTyp
 		baseEndpoint = fmt.Sprintf("users/%s/repos", name)
 	}
 
-	// Determine API type parameter (optimizes when possible)
-	typeParam := mapRepoTypes(repoTypes, accountType)
+	typeParam := mapRepoTypes(types, accountType)
 
 	for {
 		var repos []struct {
@@ -132,7 +131,28 @@ func (c *Client) ListRepos(ctx context.Context, name string, repoTypes []RepoTyp
 		page++
 	}
 
-	return allRepos, nil
+	// Apply client-side filtering for repo types to cover the cases that
+	// aren't natively supported by the GitHub API.
+	filtered := make([]*Repository, 0, len(allRepos))
+	for _, repo := range allRepos {
+		if repo.Archived && !types.Archives {
+			continue
+		}
+
+		var shouldInclude bool
+		if repo.Fork {
+			shouldInclude = types.Forks
+		} else if repo.MirrorURL != "" {
+			shouldInclude = types.Mirrors
+		} else {
+			shouldInclude = types.Sources
+		}
+		if shouldInclude {
+			filtered = append(filtered, repo)
+		}
+	}
+
+	return filtered, nil
 }
 
 // repoTypeAPIParams maps repository types to their GitHub API type parameter
@@ -142,7 +162,6 @@ func (c *Client) ListRepos(ctx context.Context, name string, repoTypes []RepoTyp
 //
 //	Sources:  orgs="sources", users="owner"
 //	Forks:    orgs="forks",   users=not supported
-//	All:      orgs="all",     users="all"
 //	Archives: not supported (filter client-side)
 //	Mirrors:  not supported (filter client-side)
 var repoTypeAPIParams = map[RepoType]map[OwnerType]string{
@@ -153,28 +172,37 @@ var repoTypeAPIParams = map[RepoType]map[OwnerType]string{
 	RepoTypeForks: {
 		OwnerTypeOrganization: "forks",
 	},
-	RepoTypeAll: {
-		OwnerTypeOrganization: "all",
-		OwnerTypeUser:         "all",
-	},
 }
 
 // mapRepoTypes returns the GitHub API type parameter for filtering repositories.
 // Returns "all" if the API doesn't support filtering the requested type(s).
-func mapRepoTypes(repoTypes []RepoType, ownerType OwnerType) string {
-	// Only optimize single-type requests
-	if len(repoTypes) != 1 {
-		return "all"
+func mapRepoTypes(types RepoTypes, ownerType OwnerType) string {
+	var selected []RepoType
+
+	if types.Sources {
+		selected = append(selected, RepoTypeSources)
+	}
+	if types.Forks {
+		selected = append(selected, RepoTypeForks)
+	}
+	if types.Archives {
+		selected = append(selected, RepoTypeArchives)
+	}
+	if types.Mirrors {
+		selected = append(selected, RepoTypeMirrors)
 	}
 
-	// Lookup API parameter: repoType -> ownerType -> apiParam
-	if params, ok := repoTypeAPIParams[repoTypes[0]]; ok {
-		if apiParam, ok := params[ownerType]; ok && apiParam != "" {
-			return apiParam
+	// If only a single type is selected, attempt to map it to an API `type`
+	// parameter value as a server-side filtering optimization.
+	if len(selected) == 1 {
+		repoType := selected[0]
+		if params, ok := repoTypeAPIParams[repoType]; ok {
+			if apiParam, ok := params[ownerType]; ok {
+				return apiParam
+			}
 		}
 	}
 
-	// Not supported by API - fetch all repos and filter client-side
 	return "all"
 }
 
