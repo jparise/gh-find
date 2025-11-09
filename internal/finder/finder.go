@@ -1,3 +1,4 @@
+// Package finder orchestrates file search across GitHub repositories.
 package finder
 
 import (
