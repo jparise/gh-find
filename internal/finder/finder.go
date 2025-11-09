@@ -109,18 +109,15 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 }
 
 func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *Options) error {
-	// Fetch tree (API call is cached by go-gh)
 	tree, err := f.client.GetTree(ctx, repo)
 	if err != nil {
 		return err
 	}
 
-	// Warn if truncated
 	if tree.Truncated {
 		f.output.Warningf("%s has >100k files, results incomplete", repo.FullName)
 	}
 
-	// Match files
 	for _, entry := range tree.Tree {
 		// Apply type filter
 		if len(opts.FileTypes) > 0 {
@@ -156,13 +153,9 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 		}
 
 		if matched {
-			// Apply exclude patterns
 			excluded := false
 			for _, excludePattern := range opts.Excludes {
-				// Use same path logic as main pattern
-				excludePath := matchPath
-
-				isExcluded, err := matchPattern(excludePattern, excludePath, opts.IgnoreCase)
+				isExcluded, err := matchPattern(excludePattern, matchPath, opts.IgnoreCase)
 				if err != nil {
 					return fmt.Errorf("exclude pattern %q failed to match path %q: %w",
 						excludePattern, entry.Path, err)

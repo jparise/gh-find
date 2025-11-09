@@ -668,7 +668,6 @@ func TestExcludePatterns(t *testing.T) {
 	}
 }
 
-// TestExcludeWithExtensions tests that exclude patterns work with extension filters.
 func TestExcludeWithExtensions(t *testing.T) {
 	tests := []struct {
 		name       string
