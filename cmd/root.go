@@ -17,30 +17,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// colorMode represents when to use colored output.
-type colorMode string
+// outputMode represents when to enable output features (color, hyperlinks, etc).
+type outputMode string
 
 const (
-	colorAuto   colorMode = "auto"
-	colorAlways colorMode = "always"
-	colorNever  colorMode = "never"
+	outputAuto   outputMode = "auto"
+	outputAlways outputMode = "always"
+	outputNever  outputMode = "never"
 )
 
-func (c *colorMode) String() string {
-	return string(*c)
+func (m *outputMode) String() string {
+	return string(*m)
 }
 
-func (c *colorMode) Set(v string) error {
+func (m *outputMode) Set(v string) error {
 	switch v {
 	case "auto", "always", "never":
-		*c = colorMode(v)
+		*m = outputMode(v)
 		return nil
 	default:
 		return fmt.Errorf("must be one of \"auto\", \"always\", or \"never\"")
 	}
 }
 
-func (c *colorMode) Type() string {
+func (m *outputMode) Type() string {
 	return "mode"
 }
 
@@ -127,7 +127,8 @@ func (f *repoTypesFlag) Type() string {
 var (
 	version = "dev"
 
-	color      = colorAuto
+	color      = outputAuto
+	hyperlink  = outputAuto
 	repoTypes  = repoTypesFlag{Sources: true}
 	fileTypes  fileTypesFlag
 	ignoreCase bool
@@ -212,6 +213,8 @@ func init() {
 	// Output control
 	rootCmd.Flags().VarP(&color, "color", "c",
 		"colorize output: auto, always, never")
+	rootCmd.Flags().Var(&hyperlink, "hyperlink",
+		"hyperlink output: auto, always, never")
 
 	// Performance & caching
 	rootCmd.Flags().IntVarP(&jobs, "jobs", "j", 10,
@@ -313,15 +316,26 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	terminal := term.FromEnv()
+
 	var colorize bool
 	switch color {
-	case colorAlways:
+	case outputAlways:
 		colorize = true
-	case colorNever:
+	case outputNever:
 		colorize = false
-	case colorAuto:
-		terminal := term.FromEnv()
+	case outputAuto:
 		colorize = terminal.IsColorEnabled()
+	}
+
+	var hyperlinks bool
+	switch hyperlink {
+	case outputAlways:
+		hyperlinks = true
+	case outputNever:
+		hyperlinks = false
+	case outputAuto:
+		hyperlinks = terminal.IsColorEnabled() && colorize
 	}
 
 	// Parse size filters
@@ -375,6 +389,6 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create finder and run search
-	f := finder.New(cmd.OutOrStdout(), cmd.ErrOrStderr(), colorize)
+	f := finder.New(cmd.OutOrStdout(), cmd.ErrOrStderr(), colorize, hyperlinks)
 	return f.Find(ctx, opts)
 }
