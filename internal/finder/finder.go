@@ -92,6 +92,7 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 
 	for _, repo := range repos {
 		if err := sem.Acquire(ctx, 1); err != nil {
+			wg.Wait()
 			return err
 		}
 
