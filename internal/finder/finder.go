@@ -113,6 +113,141 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 	return nil
 }
 
+func filterByType(entries []github.TreeEntry, types []github.FileType) []github.TreeEntry {
+	if len(types) == 0 {
+		return entries
+	}
+
+	var filtered []github.TreeEntry
+	for _, entry := range entries {
+		fileType := github.ParseFileType(entry.Mode)
+		if slices.Contains(types, fileType) {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
+}
+
+func filterByExtension(entries []github.TreeEntry, extensions []string, ignoreCase bool) []github.TreeEntry {
+	if len(extensions) == 0 {
+		return entries
+	}
+
+	if ignoreCase {
+		normalized := make([]string, len(extensions))
+		for i, ext := range extensions {
+			normalized[i] = strings.ToLower(ext)
+		}
+		extensions = normalized
+	}
+
+	var filtered []github.TreeEntry
+	for _, entry := range entries {
+		matchPath := entry.Path
+		if ignoreCase {
+			matchPath = strings.ToLower(matchPath)
+		}
+
+		ext := filepath.Ext(matchPath)
+		if ext != "" && slices.Contains(extensions, ext) {
+			filtered = append(filtered, entry)
+		}
+	}
+
+	return filtered
+}
+
+func filterBySize(entries []github.TreeEntry, minSize, maxSize int64) []github.TreeEntry {
+	if minSize == 0 && maxSize == 0 {
+		return entries
+	}
+
+	filtered := make([]github.TreeEntry, 0, len(entries))
+	for _, entry := range entries {
+		if minSize > 0 && entry.Size < minSize {
+			continue
+		}
+		if maxSize > 0 && entry.Size > maxSize {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+
+	return filtered
+}
+
+func filterByPattern(entries []github.TreeEntry, pattern string, fullPath, ignoreCase bool) ([]github.TreeEntry, error) {
+	if ignoreCase {
+		pattern = strings.ToLower(pattern)
+	}
+
+	var filtered []github.TreeEntry
+	for _, entry := range entries {
+		matchPath := entry.Path
+		if !fullPath {
+			matchPath = path.Base(matchPath)
+		}
+		if ignoreCase {
+			matchPath = strings.ToLower(matchPath)
+		}
+
+		matched, err := doublestar.Match(pattern, matchPath)
+		if err != nil {
+			return nil, fmt.Errorf("pattern %q failed to match path %q: %w", pattern, entry.Path, err)
+		}
+
+		if matched {
+			filtered = append(filtered, entry)
+		}
+	}
+
+	return filtered, nil
+}
+
+func filterByExcludes(entries []github.TreeEntry, excludes []string, fullPath, ignoreCase bool) ([]github.TreeEntry, error) {
+	if len(excludes) == 0 {
+		return entries, nil
+	}
+
+	if ignoreCase {
+		normalized := make([]string, len(excludes))
+		for i, exclude := range excludes {
+			normalized[i] = strings.ToLower(exclude)
+		}
+		excludes = normalized
+	}
+
+	var filtered []github.TreeEntry
+	for _, entry := range entries {
+		matchPath := entry.Path
+		if !fullPath {
+			matchPath = path.Base(matchPath)
+		}
+		if ignoreCase {
+			matchPath = strings.ToLower(matchPath)
+		}
+
+		excluded := false
+		for _, excludePattern := range excludes {
+			isExcluded, err := doublestar.Match(excludePattern, matchPath)
+			if err != nil {
+				return nil, fmt.Errorf("exclude pattern %q failed to match path %q: %w",
+					excludePattern, entry.Path, err)
+			}
+			if isExcluded {
+				excluded = true
+				break
+			}
+		}
+
+		if !excluded {
+			filtered = append(filtered, entry)
+		}
+	}
+
+	return filtered, nil
+}
+
 func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *Options) error {
 	tree, err := f.client.GetTree(ctx, repo)
 	if err != nil {
@@ -123,78 +258,23 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 		f.output.Warningf("%s: exceeds GitHub's API limit (100k files or 7MB) - results are incomplete", repo.FullName)
 	}
 
-	pattern := opts.Pattern
-	excludes := opts.Excludes
-	extensions := opts.Extensions
+	entries := tree.Tree
+	entries = filterByType(entries, opts.FileTypes)
+	entries = filterByExtension(entries, opts.Extensions, opts.IgnoreCase)
+	entries = filterBySize(entries, opts.MinSize, opts.MaxSize)
 
-	if opts.IgnoreCase {
-		pattern = strings.ToLower(pattern)
-		excludes = make([]string, len(excludes))
-		for i, exclude := range opts.Excludes {
-			excludes[i] = strings.ToLower(exclude)
-		}
-		extensions = make([]string, len(opts.Extensions))
-		for i, ext := range opts.Extensions {
-			extensions[i] = strings.ToLower(ext)
-		}
+	entries, err = filterByPattern(entries, opts.Pattern, opts.FullPath, opts.IgnoreCase)
+	if err != nil {
+		return err
 	}
 
-	for _, entry := range tree.Tree {
-		// Apply type filter
-		if len(opts.FileTypes) > 0 {
-			if !matchesFileType(&entry, opts.FileTypes) {
-				continue
-			}
-		}
+	entries, err = filterByExcludes(entries, opts.Excludes, opts.FullPath, opts.IgnoreCase)
+	if err != nil {
+		return err
+	}
 
-		matchPath := entry.Path
-		if !opts.FullPath {
-			matchPath = path.Base(matchPath)
-		}
-		if opts.IgnoreCase {
-			matchPath = strings.ToLower(matchPath)
-		}
-
-		// Apply extension filter
-		if len(extensions) > 0 {
-			ext := filepath.Ext(matchPath)
-			if ext == "" || !slices.Contains(extensions, ext) {
-				continue
-			}
-		}
-
-		// Apply size filter
-		if opts.MinSize > 0 && entry.Size < opts.MinSize {
-			continue
-		}
-		if opts.MaxSize > 0 && entry.Size > opts.MaxSize {
-			continue
-		}
-
-		// Apply pattern matching
-		matched, err := doublestar.Match(pattern, matchPath)
-		if err != nil {
-			return fmt.Errorf("pattern %q failed to match path %q: %w", opts.Pattern, entry.Path, err)
-		}
-
-		if matched {
-			excluded := false
-			for _, excludePattern := range excludes {
-				isExcluded, err := doublestar.Match(excludePattern, matchPath)
-				if err != nil {
-					return fmt.Errorf("exclude pattern %q failed to match path %q: %w",
-						excludePattern, entry.Path, err)
-				}
-				if isExcluded {
-					excluded = true
-					break
-				}
-			}
-
-			if !excluded {
-				f.output.Match(repo.Owner, repo.Name, repo.DefaultBranch, entry.Path)
-			}
-		}
+	for _, entry := range entries {
+		f.output.Match(repo.Owner, repo.Name, repo.DefaultBranch, entry.Path)
 	}
 
 	return nil
@@ -211,10 +291,4 @@ func parseRepoSpec(spec string) (owner, repo string, err error) {
 	default:
 		return "", "", fmt.Errorf("invalid repo spec: %s (expected username or username/repo)", spec)
 	}
-}
-
-// matchesFileType checks if an entry matches any of the specified file types (OR logic).
-func matchesFileType(entry *github.TreeEntry, fileTypes []github.FileType) bool {
-	fileType := github.ParseFileType(entry.Mode)
-	return slices.Contains(fileTypes, fileType)
 }

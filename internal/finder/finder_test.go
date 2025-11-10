@@ -7,131 +7,12 @@ import (
 	"github.com/jparise/gh-find/internal/github"
 )
 
-func TestMatchesFileType(t *testing.T) {
-	tests := []struct {
-		name  string
-		entry *github.TreeEntry
-		types []github.FileType
-		want  bool
-	}{
-		{
-			name: "file matches file type",
-			entry: &github.TreeEntry{
-				Mode: "100644",
-				Path: "main.go",
-			},
-			types: []github.FileType{github.FileTypeFile},
-			want:  true,
-		},
-		{
-			name: "executable matches executable type",
-			entry: &github.TreeEntry{
-				Mode: "100755",
-				Path: "build.sh",
-			},
-			types: []github.FileType{github.FileTypeExecutable},
-			want:  true,
-		},
-		{
-			name: "symlink matches symlink type",
-			entry: &github.TreeEntry{
-				Mode: "120000",
-				Path: "link",
-			},
-			types: []github.FileType{github.FileTypeSymlink},
-			want:  true,
-		},
-		{
-			name: "directory matches directory type",
-			entry: &github.TreeEntry{
-				Mode: "040000",
-				Path: "src",
-			},
-			types: []github.FileType{github.FileTypeDirectory},
-			want:  true,
-		},
-		{
-			name: "file does not match directory type",
-			entry: &github.TreeEntry{
-				Mode: "100644",
-				Path: "main.go",
-			},
-			types: []github.FileType{github.FileTypeDirectory},
-			want:  false,
-		},
-		{
-			name: "file matches in multiple types (OR logic)",
-			entry: &github.TreeEntry{
-				Mode: "100644",
-				Path: "main.go",
-			},
-			types: []github.FileType{github.FileTypeDirectory, github.FileTypeFile},
-			want:  true,
-		},
-		{
-			name: "executable matches in multiple types (OR logic)",
-			entry: &github.TreeEntry{
-				Mode: "100755",
-				Path: "script.sh",
-			},
-			types: []github.FileType{github.FileTypeFile, github.FileTypeExecutable},
-			want:  true,
-		},
-		{
-			name: "file does not match when type not in list",
-			entry: &github.TreeEntry{
-				Mode: "100644",
-				Path: "main.go",
-			},
-			types: []github.FileType{github.FileTypeDirectory, github.FileTypeSymlink},
-			want:  false,
-		},
-		{
-			name: "group-writable file matches file type",
-			entry: &github.TreeEntry{
-				Mode: "100664",
-				Path: "data.txt",
-			},
-			types: []github.FileType{github.FileTypeFile},
-			want:  true,
-		},
-		{
-			name: "submodule matches submodule type",
-			entry: &github.TreeEntry{
-				Mode: "160000",
-				Path: "vendor/lib",
-			},
-			types: []github.FileType{github.FileTypeSubmodule},
-			want:  true,
-		},
-		{
-			name: "submodule does not match file type",
-			entry: &github.TreeEntry{
-				Mode: "160000",
-				Path: "vendor/lib",
-			},
-			types: []github.FileType{github.FileTypeFile},
-			want:  false,
-		},
-		{
-			name: "empty types list returns false",
-			entry: &github.TreeEntry{
-				Mode: "100644",
-				Path: "main.go",
-			},
-			types: []github.FileType{},
-			want:  false,
-		},
+func treePaths(entries []github.TreeEntry) []string {
+	paths := make([]string, len(entries))
+	for i, e := range entries {
+		paths[i] = e.Path
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := matchesFileType(tt.entry, tt.types)
-			if got != tt.want {
-				t.Errorf("matchesType() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	return paths
 }
 
 func TestParseRepoSpec(t *testing.T) {
@@ -203,232 +84,459 @@ func TestParseRepoSpec(t *testing.T) {
 	}
 }
 
-func TestSizeFilter(t *testing.T) {
+func TestFilterByType(t *testing.T) {
 	tests := []struct {
-		name    string
-		minSize int64
-		maxSize int64
-		files   []struct {
-			path string
-			size int64
-		}
-		want []string
+		name      string
+		entries   []github.TreeEntry
+		types     []github.FileType
+		wantPaths []string
 	}{
 		{
-			name:    "min size filter",
-			minSize: 1024, // 1KB
-			maxSize: 0,
-			files: []struct {
-				path string
-				size int64
-			}{
-				{"small.txt", 512},
-				{"medium.txt", 1024},
-				{"large.txt", 2048},
+			name: "filter files only",
+			entries: []github.TreeEntry{
+				{Path: "main.go", Mode: "100644"},
+				{Path: "src", Mode: "040000"},
+				{Path: "build.sh", Mode: "100755"},
+				{Path: "link", Mode: "120000"},
 			},
-			want: []string{"medium.txt", "large.txt"},
+			types:     []github.FileType{github.FileTypeFile},
+			wantPaths: []string{"main.go"},
 		},
 		{
-			name:    "max size filter",
-			minSize: 0,
-			maxSize: 1024, // 1KB
-			files: []struct {
-				path string
-				size int64
-			}{
-				{"small.txt", 512},
-				{"medium.txt", 1024},
-				{"large.txt", 2048},
+			name: "filter directories only",
+			entries: []github.TreeEntry{
+				{Path: "main.go", Mode: "100644"},
+				{Path: "src", Mode: "040000"},
+				{Path: "pkg", Mode: "040000"},
+				{Path: "build.sh", Mode: "100755"},
 			},
-			want: []string{"small.txt", "medium.txt"},
+			types:     []github.FileType{github.FileTypeDirectory},
+			wantPaths: []string{"src", "pkg"},
 		},
 		{
-			name:    "range filter",
-			minSize: 1024,
-			maxSize: 2048,
-			files: []struct {
-				path string
-				size int64
-			}{
-				{"tiny.txt", 256},
-				{"small.txt", 512},
-				{"medium.txt", 1024},
-				{"large.txt", 2048},
-				{"huge.txt", 4096},
+			name: "filter executables only",
+			entries: []github.TreeEntry{
+				{Path: "main.go", Mode: "100644"},
+				{Path: "build.sh", Mode: "100755"},
+				{Path: "deploy.sh", Mode: "100755"},
+				{Path: "src", Mode: "040000"},
 			},
-			want: []string{"medium.txt", "large.txt"},
+			types:     []github.FileType{github.FileTypeExecutable},
+			wantPaths: []string{"build.sh", "deploy.sh"},
 		},
 		{
-			name:    "exact size (min=max)",
-			minSize: 1024,
-			maxSize: 1024,
-			files: []struct {
-				path string
-				size int64
-			}{
-				{"small.txt", 512},
-				{"exact.txt", 1024},
-				{"large.txt", 2048},
+			name: "filter symlinks only",
+			entries: []github.TreeEntry{
+				{Path: "main.go", Mode: "100644"},
+				{Path: "link1", Mode: "120000"},
+				{Path: "link2", Mode: "120000"},
+				{Path: "src", Mode: "040000"},
 			},
-			want: []string{"exact.txt"},
+			types:     []github.FileType{github.FileTypeSymlink},
+			wantPaths: []string{"link1", "link2"},
 		},
 		{
-			name:    "no size filter",
-			minSize: 0,
-			maxSize: 0,
-			files: []struct {
-				path string
-				size int64
-			}{
-				{"a.txt", 100},
-				{"b.txt", 200},
-				{"c.txt", 300},
+			name: "filter submodules only",
+			entries: []github.TreeEntry{
+				{Path: "main.go", Mode: "100644"},
+				{Path: "vendor/lib", Mode: "160000"},
+				{Path: "vendor/dep", Mode: "160000"},
+				{Path: "src", Mode: "040000"},
 			},
-			want: []string{"a.txt", "b.txt", "c.txt"},
+			types:     []github.FileType{github.FileTypeSubmodule},
+			wantPaths: []string{"vendor/lib", "vendor/dep"},
 		},
 		{
-			name:    "zero-size files with max filter",
-			minSize: 0,
-			maxSize: 100,
-			files: []struct {
-				path string
-				size int64
-			}{
-				{"empty.txt", 0},
-				{"small.txt", 50},
-				{"medium.txt", 100},
-				{"large.txt", 200},
+			name: "multiple types - OR logic",
+			entries: []github.TreeEntry{
+				{Path: "main.go", Mode: "100644"},
+				{Path: "src", Mode: "040000"},
+				{Path: "build.sh", Mode: "100755"},
+				{Path: "link", Mode: "120000"},
+				{Path: "vendor/lib", Mode: "160000"},
 			},
-			want: []string{"empty.txt", "small.txt", "medium.txt"},
+			types:     []github.FileType{github.FileTypeFile, github.FileTypeDirectory},
+			wantPaths: []string{"main.go", "src"},
 		},
 		{
-			name:    "large file sizes (megabytes)",
-			minSize: 1048576, // 1MB
-			maxSize: 5242880, // 5MB
-			files: []struct {
-				path string
-				size int64
-			}{
-				{"small.bin", 524288},   // 512KB
-				{"medium.bin", 1048576}, // 1MB
-				{"large.bin", 3145728},  // 3MB
-				{"huge.bin", 10485760},  // 10MB
+			name: "multiple types including executables",
+			entries: []github.TreeEntry{
+				{Path: "main.go", Mode: "100644"},
+				{Path: "src", Mode: "040000"},
+				{Path: "build.sh", Mode: "100755"},
+				{Path: "link", Mode: "120000"},
 			},
-			want: []string{"medium.bin", "large.bin"},
+			types:     []github.FileType{github.FileTypeExecutable, github.FileTypeSymlink},
+			wantPaths: []string{"build.sh", "link"},
+		},
+		{
+			name: "no type filter - returns all",
+			entries: []github.TreeEntry{
+				{Path: "main.go", Mode: "100644"},
+				{Path: "src", Mode: "040000"},
+				{Path: "build.sh", Mode: "100755"},
+			},
+			types:     []github.FileType{},
+			wantPaths: []string{"main.go", "src", "build.sh"},
+		},
+		{
+			name: "no matches",
+			entries: []github.TreeEntry{
+				{Path: "main.go", Mode: "100644"},
+				{Path: "data.txt", Mode: "100644"},
+			},
+			types:     []github.FileType{github.FileTypeDirectory},
+			wantPaths: []string{},
+		},
+		{
+			name:      "empty input slice",
+			entries:   []github.TreeEntry{},
+			types:     []github.FileType{github.FileTypeFile},
+			wantPaths: []string{},
+		},
+		{
+			name: "group-writable file matches file type",
+			entries: []github.TreeEntry{
+				{Path: "data.txt", Mode: "100664"},
+				{Path: "src", Mode: "040000"},
+			},
+			types:     []github.FileType{github.FileTypeFile},
+			wantPaths: []string{"data.txt"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var got []string
+			got := filterByType(tt.entries, tt.types)
 
-			for _, file := range tt.files {
-				// Simulate size filtering
-				if tt.minSize > 0 && file.size < tt.minSize {
-					continue
-				}
-				if tt.maxSize > 0 && file.size > tt.maxSize {
-					continue
-				}
-
-				got = append(got, file.path)
-			}
-
-			if len(got) != len(tt.want) {
-				t.Errorf("got %d files, want %d\ngot:  %v\nwant: %v", len(got), len(tt.want), got, tt.want)
-				return
-			}
-
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Errorf("got[%d] = %q, want %q", i, got[i], tt.want[i])
-				}
+			if !slices.Equal(treePaths(got), tt.wantPaths) {
+				t.Errorf("got %v, want %v", treePaths(got), tt.wantPaths)
 			}
 		})
 	}
 }
 
-// TestSizeFilterWithExtensions tests that size filter works with extension filters.
-func TestSizeFilterWithExtensions(t *testing.T) {
+func TestFilterBySize(t *testing.T) {
 	tests := []struct {
-		name       string
-		minSize    int64
-		maxSize    int64
-		extensions []string
-		files      []struct {
-			path string
-			ext  string
-			size int64
-		}
-		want []string
+		name      string
+		entries   []github.TreeEntry
+		minSize   int64
+		maxSize   int64
+		wantPaths []string
 	}{
 		{
-			name:       "size and extension combined",
-			minSize:    1024,
-			maxSize:    0,
-			extensions: []string{"go"},
-			files: []struct {
-				path string
-				ext  string
-				size int64
-			}{
-				{"small.go", "go", 512},
-				{"large.go", "go", 2048},
-				{"small.js", "js", 512},
-				{"large.js", "js", 2048},
+			name: "min size only - filters smaller files",
+			entries: []github.TreeEntry{
+				{Path: "small.txt", Size: 512},
+				{Path: "exact.txt", Size: 1024},
+				{Path: "large.txt", Size: 2048},
 			},
-			want: []string{"large.go"},
+			minSize:   1024,
+			maxSize:   0,
+			wantPaths: []string{"exact.txt", "large.txt"},
 		},
 		{
-			name:       "multiple extensions with size range",
-			minSize:    500,
-			maxSize:    1500,
-			extensions: []string{"go", "md"},
-			files: []struct {
-				path string
-				ext  string
-				size int64
-			}{
-				{"tiny.go", "go", 100},
-				{"small.go", "go", 800},
-				{"large.go", "go", 2000},
-				{"readme.md", "md", 1000},
-				{"app.js", "js", 900},
+			name: "max size only - filters larger files",
+			entries: []github.TreeEntry{
+				{Path: "small.txt", Size: 512},
+				{Path: "exact.txt", Size: 1024},
+				{Path: "large.txt", Size: 2048},
 			},
-			want: []string{"small.go", "readme.md"},
+			minSize:   0,
+			maxSize:   1024,
+			wantPaths: []string{"small.txt", "exact.txt"},
+		},
+		{
+			name: "both min and max - range filter",
+			entries: []github.TreeEntry{
+				{Path: "tiny.txt", Size: 100},
+				{Path: "min.txt", Size: 500},
+				{Path: "mid.txt", Size: 750},
+				{Path: "max.txt", Size: 1000},
+				{Path: "huge.txt", Size: 2000},
+			},
+			minSize:   500,
+			maxSize:   1000,
+			wantPaths: []string{"min.txt", "mid.txt", "max.txt"},
+		},
+		{
+			name: "no filter - returns all",
+			entries: []github.TreeEntry{
+				{Path: "a.txt", Size: 100},
+				{Path: "b.txt", Size: 200},
+			},
+			minSize:   0,
+			maxSize:   0,
+			wantPaths: []string{"a.txt", "b.txt"},
+		},
+		{
+			name: "zero-size file with min filter - excluded",
+			entries: []github.TreeEntry{
+				{Path: "empty.txt", Size: 0},
+				{Path: "small.txt", Size: 100},
+			},
+			minSize:   1,
+			maxSize:   0,
+			wantPaths: []string{"small.txt"},
+		},
+		{
+			name: "zero-size file with max filter - included",
+			entries: []github.TreeEntry{
+				{Path: "empty.txt", Size: 0},
+				{Path: "small.txt", Size: 100},
+			},
+			minSize:   0,
+			maxSize:   100,
+			wantPaths: []string{"empty.txt", "small.txt"},
+		},
+		{
+			name: "boundary: size equals min",
+			entries: []github.TreeEntry{
+				{Path: "below.txt", Size: 999},
+				{Path: "exact.txt", Size: 1000},
+				{Path: "above.txt", Size: 1001},
+			},
+			minSize:   1000,
+			maxSize:   0,
+			wantPaths: []string{"exact.txt", "above.txt"},
+		},
+		{
+			name: "boundary: size equals max",
+			entries: []github.TreeEntry{
+				{Path: "below.txt", Size: 999},
+				{Path: "exact.txt", Size: 1000},
+				{Path: "above.txt", Size: 1001},
+			},
+			minSize:   0,
+			maxSize:   1000,
+			wantPaths: []string{"below.txt", "exact.txt"},
+		},
+		{
+			name: "impossible range - min > max returns nothing",
+			entries: []github.TreeEntry{
+				{Path: "file.txt", Size: 500},
+			},
+			minSize:   1000,
+			maxSize:   100,
+			wantPaths: []string{},
+		},
+		{
+			name:      "empty input slice",
+			entries:   []github.TreeEntry{},
+			minSize:   100,
+			maxSize:   1000,
+			wantPaths: []string{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var got []string
+			got := filterBySize(tt.entries, tt.minSize, tt.maxSize)
 
-			for _, file := range tt.files {
-				// Simulate extension filtering
-				if len(tt.extensions) > 0 && !slices.Contains(tt.extensions, file.ext) {
-					continue
-				}
+			if !slices.Equal(treePaths(got), tt.wantPaths) {
+				t.Errorf("got %v, want %v", treePaths(got), tt.wantPaths)
+			}
+		})
+	}
+}
 
-				// Simulate size filtering
-				if tt.minSize > 0 && file.size < tt.minSize {
-					continue
-				}
-				if tt.maxSize > 0 && file.size > tt.maxSize {
-					continue
-				}
+func TestFilterByPattern(t *testing.T) {
+	entries := []github.TreeEntry{
+		{Path: "main.go"},
+		{Path: "cmd/root.go"},
+		{Path: "internal/foo/bar.go"},
+		{Path: "README.md"},
+		{Path: "Test.GO"},
+	}
 
-				got = append(got, file.path)
+	tests := []struct {
+		name       string
+		pattern    string
+		fullPath   bool
+		ignoreCase bool
+		wantPaths  []string
+	}{
+		{
+			name:      "simple wildcard basename",
+			pattern:   "*.go",
+			fullPath:  false,
+			wantPaths: []string{"main.go", "cmd/root.go", "internal/foo/bar.go"},
+		},
+		{
+			name:      "glob pattern with fullpath",
+			pattern:   "**/*.go",
+			fullPath:  true,
+			wantPaths: []string{"main.go", "cmd/root.go", "internal/foo/bar.go"},
+		},
+		{
+			name:       "case insensitive",
+			pattern:    "*.go",
+			fullPath:   false,
+			ignoreCase: true,
+			wantPaths:  []string{"main.go", "cmd/root.go", "internal/foo/bar.go", "Test.GO"},
+		},
+		{
+			name:      "specific filename",
+			pattern:   "README.md",
+			fullPath:  false,
+			wantPaths: []string{"README.md"},
+		},
+		{
+			name:      "no matches",
+			pattern:   "*.py",
+			fullPath:  false,
+			wantPaths: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := filterByPattern(entries, tt.pattern, tt.fullPath, tt.ignoreCase)
+			if err != nil {
+				t.Fatalf("filterByPattern() error = %v", err)
 			}
 
-			if len(got) != len(tt.want) {
-				t.Errorf("got %d files, want %d\ngot:  %v\nwant: %v", len(got), len(tt.want), got, tt.want)
-				return
+			if !slices.Equal(treePaths(got), tt.wantPaths) {
+				t.Errorf("got %v, want %v", treePaths(got), tt.wantPaths)
+			}
+		})
+	}
+}
+
+func TestFilterByExcludes(t *testing.T) {
+	entries := []github.TreeEntry{
+		{Path: "main.go"},
+		{Path: "main_test.go"},
+		{Path: "cmd/root.go"},
+		{Path: "cmd/root_test.go"},
+		{Path: "README.md"},
+		{Path: "UPPER_test.go"},
+	}
+
+	tests := []struct {
+		name       string
+		excludes   []string
+		fullPath   bool
+		ignoreCase bool
+		wantPaths  []string
+	}{
+		{
+			name:      "exclude test files basename",
+			excludes:  []string{"*_test.go"},
+			fullPath:  false,
+			wantPaths: []string{"main.go", "cmd/root.go", "README.md"},
+		},
+		{
+			name:      "multiple excludes",
+			excludes:  []string{"*_test.go", "README.*"},
+			fullPath:  false,
+			wantPaths: []string{"main.go", "cmd/root.go"},
+		},
+		{
+			name:      "no excludes",
+			excludes:  []string{},
+			fullPath:  false,
+			wantPaths: []string{"main.go", "main_test.go", "cmd/root.go", "cmd/root_test.go", "README.md", "UPPER_test.go"},
+		},
+		{
+			name:      "exclude with fullpath",
+			excludes:  []string{"cmd/*"},
+			fullPath:  true,
+			wantPaths: []string{"main.go", "main_test.go", "README.md", "UPPER_test.go"},
+		},
+		{
+			name:       "case insensitive exclude - single pattern",
+			excludes:   []string{"*_TEST.go"},
+			fullPath:   false,
+			ignoreCase: true,
+			wantPaths:  []string{"main.go", "cmd/root.go", "README.md"},
+		},
+		{
+			name:       "case insensitive exclude - multiple patterns",
+			excludes:   []string{"*_TEST.go", "readme.*"},
+			fullPath:   false,
+			ignoreCase: true,
+			wantPaths:  []string{"main.go", "cmd/root.go"},
+		},
+		{
+			name:       "case insensitive with fullpath",
+			excludes:   []string{"CMD/*"},
+			fullPath:   true,
+			ignoreCase: true,
+			wantPaths:  []string{"main.go", "main_test.go", "README.md", "UPPER_test.go"},
+		},
+		{
+			name:       "case sensitive - should not match different case",
+			excludes:   []string{"*_TEST.go"},
+			fullPath:   false,
+			ignoreCase: false,
+			wantPaths:  []string{"main.go", "main_test.go", "cmd/root.go", "cmd/root_test.go", "README.md", "UPPER_test.go"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := filterByExcludes(entries, tt.excludes, tt.fullPath, tt.ignoreCase)
+			if err != nil {
+				t.Fatalf("filterByExcludes() error = %v", err)
 			}
 
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Errorf("got[%d] = %q, want %q", i, got[i], tt.want[i])
-				}
+			if !slices.Equal(treePaths(got), tt.wantPaths) {
+				t.Errorf("got %v, want %v", treePaths(got), tt.wantPaths)
+			}
+		})
+	}
+}
+
+func TestFilterByExtension(t *testing.T) {
+	entries := []github.TreeEntry{
+		{Path: "main.go"},
+		{Path: "README.md"},
+		{Path: "config.yaml"},
+		{Path: "Test.GO"},
+		{Path: "noext"},
+	}
+
+	tests := []struct {
+		name       string
+		extensions []string
+		ignoreCase bool
+		wantPaths  []string
+	}{
+		{
+			name:       "single extension",
+			extensions: []string{".go"},
+			wantPaths:  []string{"main.go"},
+		},
+		{
+			name:       "multiple extensions",
+			extensions: []string{".go", ".md"},
+			wantPaths:  []string{"main.go", "README.md"},
+		},
+		{
+			name:       "case insensitive",
+			extensions: []string{".go"},
+			ignoreCase: true,
+			wantPaths:  []string{"main.go", "Test.GO"},
+		},
+		{
+			name:       "no match",
+			extensions: []string{".py"},
+			wantPaths:  []string{},
+		},
+		{
+			name:       "empty extensions list",
+			extensions: []string{},
+			wantPaths:  []string{"main.go", "README.md", "config.yaml", "Test.GO", "noext"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := filterByExtension(entries, tt.extensions, tt.ignoreCase)
+
+			if !slices.Equal(treePaths(got), tt.wantPaths) {
+				t.Errorf("got %v, want %v", treePaths(got), tt.wantPaths)
 			}
 		})
 	}
