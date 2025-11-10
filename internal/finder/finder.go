@@ -117,7 +117,7 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 	}
 
 	if tree.Truncated {
-		f.output.Warningf("%s has >100k files, results incomplete", repo.FullName)
+		f.output.Warningf("%s: exceeds GitHub's API limit (100k files or 7MB) - results are incomplete", repo.FullName)
 	}
 
 	pattern := opts.Pattern
