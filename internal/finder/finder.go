@@ -119,6 +119,17 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 		f.output.Warningf("%s has >100k files, results incomplete", repo.FullName)
 	}
 
+	pattern := opts.Pattern
+	excludes := opts.Excludes
+
+	if opts.IgnoreCase {
+		pattern = strings.ToLower(pattern)
+		excludes = make([]string, len(excludes))
+		for i, exclude := range opts.Excludes {
+			excludes[i] = strings.ToLower(exclude)
+		}
+	}
+
 	for _, entry := range tree.Tree {
 		// Apply type filter
 		if len(opts.FileTypes) > 0 {
@@ -147,16 +158,19 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 		if !opts.FullPath {
 			matchPath = filepath.Base(entry.Path)
 		}
+		if opts.IgnoreCase {
+			matchPath = strings.ToLower(matchPath)
+		}
 
-		matched, err := matchPattern(opts.Pattern, matchPath, opts.IgnoreCase)
+		matched, err := doublestar.Match(pattern, matchPath)
 		if err != nil {
 			return fmt.Errorf("pattern %q failed to match path %q: %w", opts.Pattern, entry.Path, err)
 		}
 
 		if matched {
 			excluded := false
-			for _, excludePattern := range opts.Excludes {
-				isExcluded, err := matchPattern(excludePattern, matchPath, opts.IgnoreCase)
+			for _, excludePattern := range excludes {
+				isExcluded, err := doublestar.Match(excludePattern, matchPath)
 				if err != nil {
 					return fmt.Errorf("exclude pattern %q failed to match path %q: %w",
 						excludePattern, entry.Path, err)
@@ -187,16 +201,6 @@ func parseRepoSpec(spec string) (owner, repo string, err error) {
 	default:
 		return "", "", fmt.Errorf("invalid repo spec: %s (expected username or username/repo)", spec)
 	}
-}
-
-// matchPattern matches a path against a glob pattern.
-func matchPattern(pattern, path string, ignoreCase bool) (bool, error) {
-	if ignoreCase {
-		pattern = strings.ToLower(pattern)
-		path = strings.ToLower(path)
-	}
-
-	return doublestar.Match(pattern, path)
 }
 
 // hasExtension checks if a path has one of the specified extensions.
