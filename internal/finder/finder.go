@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -143,17 +144,17 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 			}
 		}
 
-		path := entry.Path
+		matchPath := entry.Path
 		if !opts.FullPath {
-			path = filepath.Base(path)
+			matchPath = path.Base(matchPath)
 		}
 		if opts.IgnoreCase {
-			path = strings.ToLower(path)
+			matchPath = strings.ToLower(matchPath)
 		}
 
 		// Apply extension filter
 		if len(extensions) > 0 {
-			ext := filepath.Ext(path)
+			ext := filepath.Ext(matchPath)
 			if ext == "" || !slices.Contains(extensions, ext) {
 				continue
 			}
@@ -168,7 +169,7 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 		}
 
 		// Apply pattern matching
-		matched, err := doublestar.Match(pattern, path)
+		matched, err := doublestar.Match(pattern, matchPath)
 		if err != nil {
 			return fmt.Errorf("pattern %q failed to match path %q: %w", opts.Pattern, entry.Path, err)
 		}
@@ -176,7 +177,7 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 		if matched {
 			excluded := false
 			for _, excludePattern := range excludes {
-				isExcluded, err := doublestar.Match(excludePattern, path)
+				isExcluded, err := doublestar.Match(excludePattern, matchPath)
 				if err != nil {
 					return fmt.Errorf("exclude pattern %q failed to match path %q: %w",
 						excludePattern, entry.Path, err)
