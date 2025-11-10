@@ -181,6 +181,14 @@ Examples:
 		if jobs < 1 || jobs > 100 {
 			return fmt.Errorf("--jobs must be between 1 and 100, got %d", jobs)
 		}
+
+		// Normalize file extension strings to ensure they start with a dot.
+		for i, ext := range extensions {
+			if !strings.HasPrefix(ext, ".") {
+				extensions[i] = "." + ext
+			}
+		}
+
 		return nil
 	},
 	RunE: run,

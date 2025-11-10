@@ -121,12 +121,17 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 
 	pattern := opts.Pattern
 	excludes := opts.Excludes
+	extensions := opts.Extensions
 
 	if opts.IgnoreCase {
 		pattern = strings.ToLower(pattern)
 		excludes = make([]string, len(excludes))
 		for i, exclude := range opts.Excludes {
 			excludes[i] = strings.ToLower(exclude)
+		}
+		extensions = make([]string, len(opts.Extensions))
+		for i, ext := range opts.Extensions {
+			extensions[i] = strings.ToLower(ext)
 		}
 	}
 
@@ -138,9 +143,18 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 			}
 		}
 
+		path := entry.Path
+		if !opts.FullPath {
+			path = filepath.Base(path)
+		}
+		if opts.IgnoreCase {
+			path = strings.ToLower(path)
+		}
+
 		// Apply extension filter
-		if len(opts.Extensions) > 0 {
-			if !hasExtension(entry.Path, opts.Extensions) {
+		if len(extensions) > 0 {
+			ext := filepath.Ext(path)
+			if ext == "" || !slices.Contains(extensions, ext) {
 				continue
 			}
 		}
@@ -154,15 +168,7 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 		}
 
 		// Apply pattern matching
-		matchPath := entry.Path
-		if !opts.FullPath {
-			matchPath = filepath.Base(entry.Path)
-		}
-		if opts.IgnoreCase {
-			matchPath = strings.ToLower(matchPath)
-		}
-
-		matched, err := doublestar.Match(pattern, matchPath)
+		matched, err := doublestar.Match(pattern, path)
 		if err != nil {
 			return fmt.Errorf("pattern %q failed to match path %q: %w", opts.Pattern, entry.Path, err)
 		}
@@ -170,7 +176,7 @@ func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *
 		if matched {
 			excluded := false
 			for _, excludePattern := range excludes {
-				isExcluded, err := doublestar.Match(excludePattern, matchPath)
+				isExcluded, err := doublestar.Match(excludePattern, path)
 				if err != nil {
 					return fmt.Errorf("exclude pattern %q failed to match path %q: %w",
 						excludePattern, entry.Path, err)
@@ -201,25 +207,6 @@ func parseRepoSpec(spec string) (owner, repo string, err error) {
 	default:
 		return "", "", fmt.Errorf("invalid repo spec: %s (expected username or username/repo)", spec)
 	}
-}
-
-// hasExtension checks if a path has one of the specified extensions.
-func hasExtension(path string, extensions []string) bool {
-	ext := filepath.Ext(path)
-	if ext != "" && ext[0] == '.' {
-		ext = ext[1:] // Remove leading dot
-	}
-
-	for _, e := range extensions {
-		// Remove leading dot if present
-		if e != "" && e[0] == '.' {
-			e = e[1:]
-		}
-		if ext == e {
-			return true
-		}
-	}
-	return false
 }
 
 // matchesFileType checks if an entry matches any of the specified file types (OR logic).
