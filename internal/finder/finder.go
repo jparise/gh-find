@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/jparise/gh-find/internal/github"
@@ -31,7 +32,6 @@ func New(stdout, stderr io.Writer, colorize, hyperlinks bool) *Finder {
 
 // Find executes the search based on the provided options.
 func (f *Finder) Find(ctx context.Context, opts *Options) error {
-	// Initialize GitHub client
 	client, err := github.NewClient(opts.ClientOpts)
 	if err != nil {
 		return err
@@ -42,36 +42,31 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 	var allRepos []*github.Repository
 
 	for _, repoSpec := range opts.RepoSpecs {
-		// Parse repo spec
 		owner, repo, err := parseRepoSpec(repoSpec)
 		if err != nil {
-			f.output.Warningf("Invalid repo spec %q: %v", repoSpec, err)
-			continue
+			return err
 		}
 
-		// Get repositories for this spec
+		// Fetch either the single named repo or all of an owners repos.
 		var specRepos []*github.Repository
 		if repo != "" {
-			// Single repo
 			r, err := f.client.GetRepo(ctx, owner, repo)
 			if err != nil {
-				f.output.Warningf("Failed to fetch %s: %v", repoSpec, err)
-				continue
+				return err
 			}
 			specRepos = []*github.Repository{r}
 		} else {
-			// All repos for user/org (API calls are cached by go-gh)
 			specRepos, err = f.client.ListRepos(ctx, owner, opts.RepoTypes)
 			if err != nil {
-				f.output.Warningf("Failed to list repos for %s: %v", owner, err)
-				continue
+				return err
 			}
 		}
 
 		allRepos = append(allRepos, specRepos...)
 	}
 
-	// Deduplicate repos by full name (in case user specified same repo multiple times)
+	// The full list of repos could contain duplicates (e.g. the user provided
+	// an explicit owner/repo name that was also expanded from owner/*).
 	repoMap := make(map[string]*github.Repository)
 	for _, repo := range allRepos {
 		repoMap[repo.FullName] = repo
@@ -82,12 +77,13 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 	}
 
 	if len(repos) == 0 {
-		f.output.Infof("No repositories match the filter")
+		f.output.Warningf("No repositories match the filter")
 		return nil
 	}
 
 	// Process repositories concurrently with bounded parallelism
 	var wg sync.WaitGroup
+	var errorCount atomic.Int32
 	sem := semaphore.NewWeighted(int64(opts.Jobs))
 
 	for _, repo := range repos {
@@ -102,12 +98,18 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 			defer sem.Release(1)
 
 			if err := f.searchRepo(ctx, repo, opts); err != nil {
+				errorCount.Add(1)
 				f.output.Warningf("%s: %v", repo.FullName, err)
 			}
 		}(repo)
 	}
 
 	wg.Wait()
+
+	if int(errorCount.Load()) == len(repos) {
+		return fmt.Errorf("failed to search all %d repositories", len(repos))
+	}
+
 	return nil
 }
 
