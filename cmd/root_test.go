@@ -249,11 +249,6 @@ func TestParseByteSize(t *testing.T) {
 		{name: "petabytes pb", input: "1pb", want: 1125899906842624},
 		{name: "petabytes PiB", input: "1PiB", want: 1125899906842624},
 
-		// Decimal numbers
-		{name: "decimal kilobytes", input: "1.5k", want: 1536},
-		{name: "decimal megabytes", input: "2.5m", want: 2621440},
-		{name: "decimal gigabytes", input: "0.5g", want: 536870912},
-
 		// Whitespace handling
 		{name: "leading whitespace", input: "  10m", want: 10485760},
 		{name: "trailing whitespace", input: "10m  ", want: 10485760},
@@ -266,7 +261,8 @@ func TestParseByteSize(t *testing.T) {
 		{name: "invalid unit", input: "10x", wantErr: true},
 		{name: "negative number", input: "-10m", wantErr: true},
 		{name: "just a unit", input: "mb", wantErr: true},
-		{name: "multiple decimals", input: "1.5.5m", wantErr: true},
+		{name: "decimal rejected", input: "1.5k", wantErr: true},
+		{name: "overflow", input: "10000p", wantErr: true},
 	}
 
 	for _, tt := range tests {
