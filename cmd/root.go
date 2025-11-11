@@ -242,7 +242,7 @@ func Execute() error {
 }
 
 // parseByteSize parses a human-readable size string into bytes.
-// Supports formats like "1M", "500k", "1.5G", "1024" (plain bytes).
+// Supports formats like "1M", "500k", "1024" (plain bytes).
 // Units are case-insensitive and use binary (1024-based) multipliers.
 func parseByteSize(s string) (int64, error) {
 	s = strings.TrimSpace(s)
@@ -252,13 +252,13 @@ func parseByteSize(s string) (int64, error) {
 
 	// Find where the unit starts (last non-digit character)
 	i := len(s) - 1
-	for i >= 0 && !unicode.IsDigit(rune(s[i])) && s[i] != '.' {
+	for i >= 0 && !unicode.IsDigit(rune(s[i])) {
 		i--
 	}
 
 	// Parse the number part
 	numStr := s[:i+1]
-	num, err := strconv.ParseFloat(numStr, 64)
+	num, err := strconv.ParseInt(numStr, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid number %q: %w", numStr, err)
 	}
@@ -268,7 +268,7 @@ func parseByteSize(s string) (int64, error) {
 
 	// Parse the unit suffix
 	unit := strings.ToLower(strings.TrimSpace(s[i+1:]))
-	var multiplier float64
+	var multiplier int64
 	switch unit {
 	case "", "b":
 		multiplier = 1
@@ -286,12 +286,11 @@ func parseByteSize(s string) (int64, error) {
 		return 0, fmt.Errorf("unknown unit %q (supported: b, k, m, g, t, p)", unit)
 	}
 
-	result := num * multiplier
-	if result > float64(math.MaxInt64) {
+	if num > math.MaxInt64/multiplier {
 		return 0, fmt.Errorf("size too large (exceeds max int64)")
 	}
 
-	return int64(result), nil
+	return num * multiplier, nil
 }
 
 // parseArgs parses command-line arguments into a pattern and repository specs.
