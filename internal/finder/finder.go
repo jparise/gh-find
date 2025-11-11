@@ -67,14 +67,15 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 	}
 
 	// The full list of repos could contain duplicates (e.g. the user provided
-	// an explicit owner/repo name that was also expanded from owner/*).
-	repoMap := make(map[string]github.Repository)
+	// an explicit owner/repo name that was also expanded from owner/*). We
+	// deduplicate them while preserving input order.
+	seen := make(map[string]bool)
+	repos := make([]github.Repository, 0, len(allRepos))
 	for _, repo := range allRepos {
-		repoMap[repo.FullName] = repo
-	}
-	repos := make([]github.Repository, 0, len(repoMap))
-	for _, repo := range repoMap {
-		repos = append(repos, repo)
+		if !seen[repo.FullName] {
+			seen[repo.FullName] = true
+			repos = append(repos, repo)
+		}
 	}
 
 	if len(repos) == 0 {
