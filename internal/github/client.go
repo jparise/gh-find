@@ -118,6 +118,10 @@ func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([
 	// aren't natively supported by the GitHub API.
 	filtered := make([]Repository, 0, len(allRepos))
 	for _, repo := range allRepos {
+		if repo.Size == 0 {
+			continue
+		}
+
 		if repo.Archived && !types.Archives {
 			continue
 		}
@@ -198,6 +202,9 @@ func (c *Client) GetRepo(ctx context.Context, owner, repo string) (Repository, e
 	err := c.rest.DoWithContext(ctx, "GET", endpoint, nil, &result)
 	if err != nil {
 		return Repository{}, fmt.Errorf("failed to get repo %s/%s: %w", owner, repo, err)
+	}
+	if result.Size == 0 {
+		return Repository{}, fmt.Errorf("repository is empty (no commits yet)")
 	}
 
 	return result, nil

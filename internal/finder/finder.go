@@ -52,7 +52,8 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 		if repo != "" {
 			r, err := f.client.GetRepo(ctx, owner, repo)
 			if err != nil {
-				return err
+				f.output.Warningf("%s/%s: %v", owner, repo, err)
+				continue
 			}
 			specRepos = []github.Repository{r}
 		} else {

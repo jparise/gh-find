@@ -23,7 +23,7 @@ func generateRepoPage(owner string, startNum, count int) string {
 	for i := range count {
 		repoNum := startNum + i
 		//nolint:gocritic // JSON template requires literal quoted strings
-		repos[i] = fmt.Sprintf(`{"name": "repo%d", "full_name": "%s/repo%d", "owner": {"login": "%s"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""}`,
+		repos[i] = fmt.Sprintf(`{"name": "repo%d", "full_name": "%s/repo%d", "owner": {"login": "%s"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""}`,
 			repoNum, owner, repoNum, owner)
 	}
 	result := "[" + repos[0]
@@ -328,7 +328,7 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "User",
 			mockPages: []string{
 				// Only 1 repo (less than 100) - pagination stops after this
-				`[{"name": "repo1", "full_name": "octocat/repo1", "owner": {"login": "octocat"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""}]`,
+				`[{"name": "repo1", "full_name": "octocat/repo1", "owner": {"login": "octocat"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""}]`,
 			},
 			wantRepoCount: 1,
 			wantErr:       false,
@@ -340,7 +340,7 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "Organization",
 			mockPages: []string{
 				// Only 1 repo (less than 100) - pagination stops after this
-				`[{"name": "repo1", "full_name": "github/repo1", "owner": {"login": "github"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""}]`,
+				`[{"name": "repo1", "full_name": "github/repo1", "owner": {"login": "github"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""}]`,
 			},
 			wantRepoCount: 1,
 			wantErr:       false,
@@ -365,7 +365,7 @@ func TestListRepos(t *testing.T) {
 				// First page: exactly pageSize repos (full page)
 				generateRepoPage("manyrepos", 1, pageSize),
 				// Second page: partial (triggers page++ and then stops)
-				`[{"name": "repo101", "full_name": "manyrepos/repo101", "owner": {"login": "manyrepos"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""}]`,
+				`[{"name": "repo101", "full_name": "manyrepos/repo101", "owner": {"login": "manyrepos"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""}]`,
 			},
 			wantRepoCount: pageSize + 1,
 			wantErr:       false,
@@ -377,9 +377,9 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "User",
 			mockPages: []string{
 				`[
-					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
+					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
 				]`,
 			},
 			wantRepoCount: 1,
@@ -393,9 +393,9 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "User",
 			mockPages: []string{
 				`[
-					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
+					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
 				]`,
 			},
 			wantRepoCount: 1,
@@ -409,9 +409,9 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "User",
 			mockPages: []string{
 				`[
-					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
+					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
 				]`,
 			},
 			wantRepoCount: 1,
@@ -425,10 +425,10 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "User",
 			mockPages: []string{
 				`[
-					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": true, "mirror_url": ""},
-					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": true, "mirror_url": ""}
+					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": true, "mirror_url": ""},
+					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": true, "mirror_url": ""}
 				]`,
 			},
 			wantRepoCount: 2,
@@ -442,8 +442,8 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "User",
 			mockPages: []string{
 				`[
-					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": true, "mirror_url": ""}
+					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": true, "mirror_url": ""}
 				]`,
 			},
 			wantRepoCount: 1,
@@ -457,9 +457,9 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "User",
 			mockPages: []string{
 				`[
-					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": true, "mirror_url": ""}
+					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": true, "mirror_url": ""}
 				]`,
 			},
 			wantRepoCount: 2,
@@ -473,10 +473,10 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "User",
 			mockPages: []string{
 				`[
-					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": true, "mirror_url": ""},
-					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": true, "mirror_url": ""}
+					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": true, "mirror_url": ""},
+					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
+					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": true, "mirror_url": ""}
 				]`,
 			},
 			wantRepoCount: 2,
@@ -490,12 +490,27 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "User",
 			mockPages: []string{
 				`[
-					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "fork": true, "archived": false, "mirror_url": ""}
+					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""}
 				]`,
 			},
 			wantRepoCount: 0,
 			wantRepoNames: nil,
+			wantErr:       false,
+		},
+		{
+			name:          "filter empty repositories",
+			username:      "filtertest",
+			repoTypes:     RepoTypes{Sources: true},
+			mockOwnerType: "User",
+			mockPages: []string{
+				`[
+					{"name": "normal-repo", "full_name": "filtertest/normal-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "empty-repo", "full_name": "filtertest/empty-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 0, "fork": false, "archived": false, "mirror_url": ""}
+				]`,
+			},
+			wantRepoCount: 1,
+			wantRepoNames: []string{"normal-repo"},
 			wantErr:       false,
 		},
 	}
@@ -594,6 +609,7 @@ func TestGetRepo(t *testing.T) {
 				"full_name": "octocat/Hello-World",
 				"owner": {"login": "octocat"},
 				"default_branch": "main",
+				"size": 1024,
 				"fork": false,
 				"archived": false,
 				"mirror_url": ""
@@ -615,6 +631,23 @@ func TestGetRepo(t *testing.T) {
 			mockStatus: 403,
 			mockBody:   `{"message": "Forbidden"}`,
 			wantErr:    true,
+		},
+		{
+			name:       "empty repository",
+			owner:      "octocat",
+			repo:       "empty-repo",
+			mockStatus: 200,
+			mockBody: `{
+				"name": "empty-repo",
+				"full_name": "octocat/empty-repo",
+				"owner": {"login": "octocat"},
+				"default_branch": "main",
+				"size": 0,
+				"fork": false,
+				"archived": false,
+				"mirror_url": ""
+			}`,
+			wantErr: true,
 		},
 	}
 
