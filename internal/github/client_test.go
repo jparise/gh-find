@@ -661,7 +661,7 @@ func TestGetRepo(t *testing.T) {
 func TestGetTree(t *testing.T) {
 	tests := []struct {
 		name          string
-		repo          *Repository
+		repo          Repository
 		mockStatus    int
 		mockBody      string
 		wantTruncated bool
@@ -670,7 +670,7 @@ func TestGetTree(t *testing.T) {
 	}{
 		{
 			name: "small tree",
-			repo: &Repository{
+			repo: Repository{
 				Owner:         "octocat",
 				Name:          "Hello-World",
 				DefaultBranch: "main",
@@ -691,7 +691,7 @@ func TestGetTree(t *testing.T) {
 		},
 		{
 			name: "truncated tree",
-			repo: &Repository{
+			repo: Repository{
 				Owner:         "octocat",
 				Name:          "huge-repo",
 				DefaultBranch: "main",
@@ -711,7 +711,7 @@ func TestGetTree(t *testing.T) {
 		},
 		{
 			name: "empty repository",
-			repo: &Repository{
+			repo: Repository{
 				Owner:         "octocat",
 				Name:          "empty-repo",
 				DefaultBranch: "main",
@@ -729,7 +729,7 @@ func TestGetTree(t *testing.T) {
 		},
 		{
 			name: "invalid branch",
-			repo: &Repository{
+			repo: Repository{
 				Owner:         "octocat",
 				Name:          "repo",
 				DefaultBranch: "nonexistent",
