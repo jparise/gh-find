@@ -1,18 +1,39 @@
 package github
 
 import (
+	"encoding/json"
 	"strings"
 )
 
 // Repository represents a GitHub repository.
 type Repository struct {
-	Owner         string
-	Name          string
-	FullName      string // owner/name
-	DefaultBranch string
-	Fork          bool
-	Archived      bool
-	MirrorURL     string
+	Owner         string `json:"-"`
+	Name          string `json:"name"`
+	FullName      string `json:"full_name"`
+	DefaultBranch string `json:"default_branch"`
+	Fork          bool   `json:"fork"`
+	Archived      bool   `json:"archived"`
+	MirrorURL     string `json:"mirror_url"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for Repository.
+func (r *Repository) UnmarshalJSON(data []byte) error {
+	// Use an alias to extend Repository with the nested Owner struct.
+	type Alias Repository
+	aux := &struct {
+		Owner struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+		*Alias
+	}{
+		Alias: (*Alias)(r),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	r.Owner = aux.Owner.Login
+	return nil
 }
 
 // TreeEntry represents a file or directory in a Git tree.

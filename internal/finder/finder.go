@@ -39,7 +39,7 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 	f.client = client
 
 	// Get repositories to search from all repo specs
-	var allRepos []*github.Repository
+	var allRepos []github.Repository
 
 	for _, repoSpec := range opts.RepoSpecs {
 		owner, repo, err := parseRepoSpec(repoSpec)
@@ -48,13 +48,13 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 		}
 
 		// Fetch either the single named repo or all of an owners repos.
-		var specRepos []*github.Repository
+		var specRepos []github.Repository
 		if repo != "" {
 			r, err := f.client.GetRepo(ctx, owner, repo)
 			if err != nil {
 				return err
 			}
-			specRepos = []*github.Repository{r}
+			specRepos = []github.Repository{r}
 		} else {
 			specRepos, err = f.client.ListRepos(ctx, owner, opts.RepoTypes)
 			if err != nil {
@@ -67,11 +67,11 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 
 	// The full list of repos could contain duplicates (e.g. the user provided
 	// an explicit owner/repo name that was also expanded from owner/*).
-	repoMap := make(map[string]*github.Repository)
+	repoMap := make(map[string]github.Repository)
 	for _, repo := range allRepos {
 		repoMap[repo.FullName] = repo
 	}
-	repos := make([]*github.Repository, 0, len(repoMap))
+	repos := make([]github.Repository, 0, len(repoMap))
 	for _, repo := range repoMap {
 		repos = append(repos, repo)
 	}
@@ -93,7 +93,7 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 		}
 
 		wg.Add(1)
-		go func(repo *github.Repository) {
+		go func(repo github.Repository) {
 			defer wg.Done()
 			defer sem.Release(1)
 
@@ -248,7 +248,7 @@ func filterByExcludes(entries []github.TreeEntry, excludes []string, fullPath, i
 	return filtered, nil
 }
 
-func (f *Finder) searchRepo(ctx context.Context, repo *github.Repository, opts *Options) error {
+func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *Options) error {
 	tree, err := f.client.GetTree(ctx, repo)
 	if err != nil {
 		return err

@@ -70,14 +70,14 @@ func (c *Client) GetOwnerType(ctx context.Context, name string) (OwnerType, erro
 
 // ListRepos returns all repositories for a user or organization with pagination.
 // It detects whether the name is a user or org and uses the appropriate endpoint.
-func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([]*Repository, error) {
+func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([]Repository, error) {
 	// Detect if this is a user or organization
 	accountType, err := c.GetOwnerType(ctx, name)
 	if err != nil {
 		return nil, err
 	}
 
-	var allRepos []*Repository
+	var allRepos []Repository
 	page := 1
 	perPage := pageSize
 
@@ -92,21 +92,10 @@ func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([
 	typeParam := mapRepoTypes(types, accountType)
 
 	for {
-		var repos []struct {
-			Name     string `json:"name"`
-			FullName string `json:"full_name"`
-			Owner    struct {
-				Login string `json:"login"`
-			} `json:"owner"`
-			DefaultBranch string `json:"default_branch"`
-			Fork          bool   `json:"fork"`
-			Archived      bool   `json:"archived"`
-			MirrorURL     string `json:"mirror_url"`
-		}
-
 		endpoint := fmt.Sprintf("%s?type=%s&per_page=%d&page=%d",
 			baseEndpoint, typeParam, perPage, page)
 
+		var repos []Repository
 		err := c.rest.DoWithContext(ctx, "GET", endpoint, nil, &repos)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list repos for %s: %w", name, err)
@@ -116,17 +105,7 @@ func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([
 			break
 		}
 
-		for _, repo := range repos {
-			allRepos = append(allRepos, &Repository{
-				Owner:         repo.Owner.Login,
-				Name:          repo.Name,
-				FullName:      repo.FullName,
-				DefaultBranch: repo.DefaultBranch,
-				Fork:          repo.Fork,
-				Archived:      repo.Archived,
-				MirrorURL:     repo.MirrorURL,
-			})
-		}
+		allRepos = append(allRepos, repos...)
 
 		// Check if there are more pages
 		if len(repos) < perPage {
@@ -137,7 +116,7 @@ func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([
 
 	// Apply client-side filtering for repo types to cover the cases that
 	// aren't natively supported by the GitHub API.
-	filtered := make([]*Repository, 0, len(allRepos))
+	filtered := make([]Repository, 0, len(allRepos))
 	for _, repo := range allRepos {
 		if repo.Archived && !types.Archives {
 			continue
@@ -212,38 +191,20 @@ func mapRepoTypes(types RepoTypes, ownerType OwnerType) string {
 }
 
 // GetRepo fetches a single repository.
-func (c *Client) GetRepo(ctx context.Context, owner, repo string) (*Repository, error) {
-	var result struct {
-		Name     string `json:"name"`
-		FullName string `json:"full_name"`
-		Owner    struct {
-			Login string `json:"login"`
-		} `json:"owner"`
-		DefaultBranch string `json:"default_branch"`
-		Fork          bool   `json:"fork"`
-		Archived      bool   `json:"archived"`
-		MirrorURL     string `json:"mirror_url"`
-	}
+func (c *Client) GetRepo(ctx context.Context, owner, repo string) (Repository, error) {
+	var result Repository
 
 	endpoint := fmt.Sprintf("repos/%s/%s", owner, repo)
 	err := c.rest.DoWithContext(ctx, "GET", endpoint, nil, &result)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get repo %s/%s: %w", owner, repo, err)
+		return Repository{}, fmt.Errorf("failed to get repo %s/%s: %w", owner, repo, err)
 	}
 
-	return &Repository{
-		Owner:         result.Owner.Login,
-		Name:          result.Name,
-		FullName:      result.FullName,
-		DefaultBranch: result.DefaultBranch,
-		Fork:          result.Fork,
-		Archived:      result.Archived,
-		MirrorURL:     result.MirrorURL,
-	}, nil
+	return result, nil
 }
 
 // GetTree fetches the Git tree for a repository recursively.
-func (c *Client) GetTree(ctx context.Context, repo *Repository) (*TreeResponse, error) {
+func (c *Client) GetTree(ctx context.Context, repo Repository) (*TreeResponse, error) {
 	var tree TreeResponse
 
 	// Fetch the tree for the default branch with recursive flag
