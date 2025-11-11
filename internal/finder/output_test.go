@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/jparise/gh-find/internal/github"
 )
 
 func TestNewOutput(t *testing.T) {
@@ -68,38 +70,45 @@ func TestNewOutput(t *testing.T) {
 func TestMatch(t *testing.T) {
 	tests := []struct {
 		name       string
-		owner      string
-		repo       string
-		branch     string
+		repo       github.Repository
 		path       string
 		hyperlinks bool
 		want       string
 		wantURL    string
 	}{
 		{
-			name:       "simple match without hyperlinks",
-			owner:      "cli",
-			repo:       "cli",
-			branch:     "trunk",
+			name: "simple match without hyperlinks",
+			repo: github.Repository{
+				Owner:         "cli",
+				Name:          "cli",
+				DefaultBranch: "trunk",
+				URL:           "https://github.com/cli/cli",
+			},
 			path:       "main.go",
 			hyperlinks: false,
 			want:       "cli/cli:main.go",
 		},
 		{
-			name:       "match with hyperlinks",
-			owner:      "cli",
-			repo:       "cli",
-			branch:     "trunk",
+			name: "match with hyperlinks",
+			repo: github.Repository{
+				Owner:         "cli",
+				Name:          "cli",
+				DefaultBranch: "trunk",
+				URL:           "https://github.com/cli/cli",
+			},
 			path:       "main.go",
 			hyperlinks: true,
 			want:       "cli/cli:main.go",
 			wantURL:    "https://github.com/cli/cli/blob/trunk/main.go",
 		},
 		{
-			name:       "nested path with hyperlinks",
-			owner:      "golang",
-			repo:       "go",
-			branch:     "master",
+			name: "nested path with hyperlinks",
+			repo: github.Repository{
+				Owner:         "golang",
+				Name:          "go",
+				DefaultBranch: "master",
+				URL:           "https://github.com/golang/go",
+			},
 			path:       "src/cmd/go/main.go",
 			hyperlinks: true,
 			want:       "golang/go:src/cmd/go/main.go",
@@ -114,7 +123,7 @@ func TestMatch(t *testing.T) {
 
 			output := NewOutput(stdout, stderr, false, tt.hyperlinks)
 
-			output.Match(tt.owner, tt.repo, tt.branch, tt.path)
+			output.Match(tt.repo, tt.path)
 			got := stdout.String()
 
 			if !strings.Contains(got, tt.want) {
@@ -217,6 +226,13 @@ func TestOutputThreadSafety(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	output := NewOutput(stdout, stderr, false, false)
 
+	repo := github.Repository{
+		Owner:         "owner",
+		Name:          "repo",
+		DefaultBranch: "main",
+		URL:           "https://github.com/owner/repo",
+	}
+
 	const numGoroutines = 10
 	const numCalls = 100
 
@@ -227,7 +243,7 @@ func TestOutputThreadSafety(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range numCalls {
-				output.Match("owner", "repo", "main", "file.go")
+				output.Match(repo, "file.go")
 			}
 		}()
 		go func() {

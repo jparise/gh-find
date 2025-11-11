@@ -275,7 +275,7 @@ func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *O
 	}
 
 	for _, entry := range entries {
-		f.output.Match(repo.Owner, repo.Name, repo.DefaultBranch, entry.Path)
+		f.output.Match(repo, entry.Path)
 	}
 
 	return nil
