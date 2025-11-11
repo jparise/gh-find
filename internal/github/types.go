@@ -11,6 +11,7 @@ type Repository struct {
 	Name          string `json:"name"`
 	FullName      string `json:"full_name"`
 	DefaultBranch string `json:"default_branch"`
+	URL           string `json:"html_url"`
 	Size          int    `json:"size"`
 	Fork          bool   `json:"fork"`
 	Archived      bool   `json:"archived"`

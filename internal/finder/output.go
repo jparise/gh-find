@@ -5,7 +5,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/cli/go-gh/v2/pkg/auth"
+	"github.com/jparise/gh-find/internal/github"
 	"github.com/mgutz/ansi"
 )
 
@@ -14,7 +14,6 @@ type Output struct {
 	mu         sync.Mutex
 	stdout     io.Writer
 	stderr     io.Writer
-	hostname   string
 	hyperlinks bool
 
 	cyan   func(string) string
@@ -26,8 +25,6 @@ type Output struct {
 
 // NewOutput creates a new Output with optional color and hyperlink support.
 func NewOutput(stdout, stderr io.Writer, colorize, hyperlinks bool) *Output {
-	hostname, _ := auth.DefaultHost()
-
 	color := func(name string) func(string) string {
 		if colorize {
 			return ansi.ColorFunc(name)
@@ -38,7 +35,6 @@ func NewOutput(stdout, stderr io.Writer, colorize, hyperlinks bool) *Output {
 	return &Output{
 		stdout:     stdout,
 		stderr:     stderr,
-		hostname:   hostname,
 		hyperlinks: hyperlinks,
 		cyan:       color("cyan"),
 		green:      color("green+b"),
@@ -53,17 +49,17 @@ func makeHyperlink(url, text string) string {
 }
 
 // Match writes a file match in the format: owner/repo:path.
-func (o *Output) Match(owner, repo, branch, path string) {
+func (o *Output) Match(repo github.Repository, path string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
 	formatted := fmt.Sprintf("%s/%s:%s",
-		o.cyan(owner),
-		o.green(repo),
+		o.cyan(repo.Owner),
+		o.green(repo.Name),
 		o.white(path))
 
 	if o.hyperlinks {
-		url := fmt.Sprintf("https://%s/%s/%s/blob/%s/%s", o.hostname, owner, repo, branch, path)
+		url := fmt.Sprintf("%s/blob/%s/%s", repo.URL, repo.DefaultBranch, path)
 		formatted = makeHyperlink(url, formatted)
 	}
 
