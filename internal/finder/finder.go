@@ -38,32 +38,31 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 	}
 	f.client = client
 
-	// Get repositories to search from all repo specs
 	var allRepos []github.Repository
 
-	for _, repoSpec := range opts.RepoSpecs {
-		owner, repo, err := parseRepoSpec(repoSpec)
-		if err != nil {
-			return err
-		}
+	for _, spec := range opts.RepoSpecs {
+		var repos []github.Repository
 
-		// Fetch either the single named repo or all of an owners repos.
-		var specRepos []github.Repository
-		if repo != "" {
-			r, err := f.client.GetRepo(ctx, owner, repo)
+		// Fetch either the single named repo or all of an owner's repos.
+		if spec.Repo != "" {
+			r, err := f.client.GetRepo(ctx, spec.Owner, spec.Repo)
 			if err != nil {
-				f.output.Warningf("%s/%s: %v", owner, repo, err)
+				f.output.Warningf("%s/%s: %v", spec.Owner, spec.Repo, err)
 				continue
 			}
-			specRepos = []github.Repository{r}
+			if spec.Ref != "" {
+				r.Ref = spec.Ref
+				r.ExplicitRef = true
+			}
+			repos = []github.Repository{r}
 		} else {
-			specRepos, err = f.client.ListRepos(ctx, owner, opts.RepoTypes)
+			repos, err = f.client.ListRepos(ctx, spec.Owner, opts.RepoTypes)
 			if err != nil {
 				return err
 			}
 		}
 
-		allRepos = append(allRepos, specRepos...)
+		allRepos = append(allRepos, repos...)
 	}
 
 	// The full list of repos could contain duplicates (e.g. the user provided
@@ -72,8 +71,9 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 	seen := make(map[string]bool)
 	repos := make([]github.Repository, 0, len(allRepos))
 	for _, repo := range allRepos {
-		if !seen[repo.FullName] {
-			seen[repo.FullName] = true
+		repoKey := repo.FullName + "@" + repo.Ref
+		if !seen[repoKey] {
+			seen[repoKey] = true
 			repos = append(repos, repo)
 		}
 	}
@@ -280,15 +280,4 @@ func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *O
 	}
 
 	return nil
-}
-
-// parseRepoSpec parses "owner" or "owner/repo" format.
-func parseRepoSpec(spec string) (owner, repo string, err error) {
-	owner, repo, found := strings.Cut(spec, "/")
-
-	if owner == "" || (found && (repo == "" || strings.Contains(repo, "/"))) {
-		return "", "", fmt.Errorf("invalid repo spec: %s (expected username or username/repo)", spec)
-	}
-
-	return owner, repo, nil
 }

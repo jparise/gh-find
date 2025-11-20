@@ -79,10 +79,10 @@ func TestMatch(t *testing.T) {
 		{
 			name: "simple match without hyperlinks",
 			repo: github.Repository{
-				Owner:         "cli",
-				Name:          "cli",
-				DefaultBranch: "trunk",
-				URL:           "https://github.com/cli/cli",
+				Owner: "cli",
+				Name:  "cli",
+				Ref:   "trunk",
+				URL:   "https://github.com/cli/cli",
 			},
 			path:       "main.go",
 			hyperlinks: false,
@@ -91,10 +91,10 @@ func TestMatch(t *testing.T) {
 		{
 			name: "match with hyperlinks",
 			repo: github.Repository{
-				Owner:         "cli",
-				Name:          "cli",
-				DefaultBranch: "trunk",
-				URL:           "https://github.com/cli/cli",
+				Owner: "cli",
+				Name:  "cli",
+				Ref:   "trunk",
+				URL:   "https://github.com/cli/cli",
 			},
 			path:       "main.go",
 			hyperlinks: true,
@@ -104,15 +104,28 @@ func TestMatch(t *testing.T) {
 		{
 			name: "nested path with hyperlinks",
 			repo: github.Repository{
-				Owner:         "golang",
-				Name:          "go",
-				DefaultBranch: "master",
-				URL:           "https://github.com/golang/go",
+				Owner: "golang",
+				Name:  "go",
+				Ref:   "master",
+				URL:   "https://github.com/golang/go",
 			},
 			path:       "src/cmd/go/main.go",
 			hyperlinks: true,
 			want:       "golang/go:src/cmd/go/main.go",
 			wantURL:    "https://github.com/golang/go/blob/master/src/cmd/go/main.go",
+		},
+		{
+			name: "explicit ref shown in output",
+			repo: github.Repository{
+				Owner:       "cli",
+				Name:        "cli",
+				Ref:         "v2.40.0",
+				ExplicitRef: true,
+				URL:         "https://github.com/cli/cli",
+			},
+			path:       "main.go",
+			hyperlinks: false,
+			want:       "cli/cli@v2.40.0:main.go",
 		},
 	}
 
@@ -227,10 +240,10 @@ func TestOutputThreadSafety(t *testing.T) {
 	output := NewOutput(stdout, stderr, false, false)
 
 	repo := github.Repository{
-		Owner:         "owner",
-		Name:          "repo",
-		DefaultBranch: "main",
-		URL:           "https://github.com/owner/repo",
+		Owner: "owner",
+		Name:  "repo",
+		Ref:   "main",
+		URL:   "https://github.com/owner/repo",
 	}
 
 	const numGoroutines = 10

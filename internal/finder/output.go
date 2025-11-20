@@ -48,22 +48,26 @@ func makeHyperlink(url, text string) string {
 	return fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", url, text)
 }
 
-// Match writes a file match in the format: owner/repo:path.
+// Match writes a file match in the format: owner/repo:path or owner/repo@ref:path.
 func (o *Output) Match(repo github.Repository, path string) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
+	repoName := repo.Name
+	if repo.ExplicitRef {
+		repoName += "@" + repo.Ref
+	}
 
 	formatted := fmt.Sprintf("%s/%s:%s",
 		o.cyan(repo.Owner),
-		o.green(repo.Name),
+		o.green(repoName),
 		o.white(path))
 
 	if o.hyperlinks {
-		url := fmt.Sprintf("%s/blob/%s/%s", repo.URL, repo.DefaultBranch, path)
+		url := fmt.Sprintf("%s/blob/%s/%s", repo.URL, repo.Ref, path)
 		formatted = makeHyperlink(url, formatted)
 	}
 
-	fmt.Fprintf(o.stdout, "%s\n", formatted)
+	o.mu.Lock()
+	fmt.Fprintln(o.stdout, formatted)
+	o.mu.Unlock()
 }
 
 // Warningf writes a formatted warning message to stderr.

@@ -2,10 +2,17 @@ package finder
 
 import "github.com/jparise/gh-find/internal/github"
 
+// RepoSpec represents a parsed repository specification.
+type RepoSpec struct {
+	Owner string // Repository owner (user or organization)
+	Repo  string // Repository name (empty means expand all repos for owner)
+	Ref   string // Branch/tag/SHA (empty means use default branch from API)
+}
+
 // Options contains all search parameters.
 type Options struct {
 	Pattern    string
-	RepoSpecs  []string          // "owner" or "owner/repo"
+	RepoSpecs  []RepoSpec
 	RepoTypes  github.RepoTypes  // Repository types to include
 	FileTypes  []github.FileType // File types to include (OR matching)
 	IgnoreCase bool

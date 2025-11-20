@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/jparise/gh-find/internal/finder"
 	"github.com/jparise/gh-find/internal/github"
 )
 
@@ -325,12 +326,85 @@ func TestRepoTypes(t *testing.T) {
 	}
 }
 
+func TestParseRepoSpec(t *testing.T) {
+	tests := []struct {
+		name    string
+		spec    string
+		want    finder.RepoSpec
+		wantErr bool
+	}{
+		{
+			name: "owner only",
+			spec: "octocat",
+			want: finder.RepoSpec{Owner: "octocat", Repo: "", Ref: ""},
+		},
+		{
+			name: "owner and repo",
+			spec: "octocat/hello-world",
+			want: finder.RepoSpec{Owner: "octocat", Repo: "hello-world", Ref: ""},
+		},
+		{
+			name: "repo with ref",
+			spec: "cli/cli@trunk",
+			want: finder.RepoSpec{Owner: "cli", Repo: "cli", Ref: "trunk"},
+		},
+		{
+			name: "repo with empty ref",
+			spec: "cli/cli@",
+			want: finder.RepoSpec{Owner: "cli", Repo: "cli", Ref: ""},
+		},
+		{
+			name:    "owner with ref not allowed",
+			spec:    "octocat@main",
+			wantErr: true,
+		},
+		{
+			name:    "too many slashes",
+			spec:    "owner/repo/extra",
+			wantErr: true,
+		},
+		{
+			name:    "empty string",
+			spec:    "",
+			wantErr: true,
+		},
+		{
+			name:    "just slash",
+			spec:    "/",
+			wantErr: true,
+		},
+		{
+			name:    "empty owner",
+			spec:    "/repo",
+			wantErr: true,
+		},
+		{
+			name:    "empty repo",
+			spec:    "owner/",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseRepoSpec(tt.spec)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseRepoSpec(%q) error = %v, wantErr %v", tt.spec, err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("parseRepoSpec(%q) = %+v, want %+v", tt.spec, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseArgs(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        []string
 		wantPattern string
-		wantRepos   []string
+		wantRepos   []finder.RepoSpec
 		wantErr     bool
 	}{
 		{
@@ -339,39 +413,39 @@ func TestParseArgs(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:        "single repo",
+			name:        "single repo defaults to star pattern",
 			args:        []string{"cli/cli"},
 			wantPattern: "*",
-			wantRepos:   []string{"cli/cli"},
-			wantErr:     false,
+			wantRepos:   []finder.RepoSpec{{Owner: "cli", Repo: "cli"}},
 		},
 		{
-			name:        "explicit pattern with single repo",
-			args:        []string{"*.go", "cli/cli"},
-			wantPattern: "*.go",
-			wantRepos:   []string{"cli/cli"},
-			wantErr:     false,
-		},
-		{
-			name:        "explicit pattern with multiple repos",
+			name:        "pattern with multiple repos",
 			args:        []string{"*.go", "cli/cli", "cli/go-gh"},
 			wantPattern: "*.go",
-			wantRepos:   []string{"cli/cli", "cli/go-gh"},
-			wantErr:     false,
+			wantRepos: []finder.RepoSpec{
+				{Owner: "cli", Repo: "cli"},
+				{Owner: "cli", Repo: "go-gh"},
+			},
 		},
 		{
-			name:        "empty pattern with single repo",
+			name:        "repos with refs",
+			args:        []string{"*.go", "cli/cli@main", "golang/go@release-branch.go1.21"},
+			wantPattern: "*.go",
+			wantRepos: []finder.RepoSpec{
+				{Owner: "cli", Repo: "cli", Ref: "main"},
+				{Owner: "golang", Repo: "go", Ref: "release-branch.go1.21"},
+			},
+		},
+		{
+			name:        "empty pattern defaults to star",
 			args:        []string{"", "cli/cli"},
 			wantPattern: "*",
-			wantRepos:   []string{"cli/cli"},
-			wantErr:     false,
+			wantRepos:   []finder.RepoSpec{{Owner: "cli", Repo: "cli"}},
 		},
 		{
-			name:        "empty pattern with multiple repos",
-			args:        []string{"", "cli/cli", "cli/go-gh"},
-			wantPattern: "*",
-			wantRepos:   []string{"cli/cli", "cli/go-gh"},
-			wantErr:     false,
+			name:    "invalid repo spec",
+			args:    []string{"*.go", "owner/repo/extra"},
+			wantErr: true,
 		},
 	}
 
@@ -395,8 +469,8 @@ func TestParseArgs(t *testing.T) {
 				t.Errorf("parseArgs(%v) pattern = %q, want %q", tt.args, pattern, tt.wantPattern)
 			}
 
-			if !slices.Equal(repos, tt.wantRepos) {
-				t.Errorf("parseArgs(%v) = %v, want %v", tt.args, repos, tt.wantRepos)
+			if !reflect.DeepEqual(repos, tt.wantRepos) {
+				t.Errorf("parseArgs(%v) repos = %+v, want %+v", tt.args, repos, tt.wantRepos)
 			}
 		})
 	}
