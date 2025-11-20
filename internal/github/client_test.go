@@ -513,6 +513,21 @@ func TestListRepos(t *testing.T) {
 			wantRepoNames: []string{"normal-repo"},
 			wantErr:       false,
 		},
+		{
+			name:          "filter repositories without default branch",
+			username:      "filtertest",
+			repoTypes:     RepoTypes{Sources: true},
+			mockOwnerType: "User",
+			mockPages: []string{
+				`[
+					{"name": "normal-repo", "full_name": "filtertest/normal-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
+					{"name": "no-branch-repo", "full_name": "filtertest/no-branch-repo", "owner": {"login": "filtertest"}, "default_branch": "", "size": 1024, "fork": false, "archived": false, "mirror_url": ""}
+				]`,
+			},
+			wantRepoCount: 1,
+			wantRepoNames: []string{"normal-repo"},
+			wantErr:       false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -643,6 +658,23 @@ func TestGetRepo(t *testing.T) {
 				"owner": {"login": "octocat"},
 				"default_branch": "main",
 				"size": 0,
+				"fork": false,
+				"archived": false,
+				"mirror_url": ""
+			}`,
+			wantErr: true,
+		},
+		{
+			name:       "repository without default branch",
+			owner:      "octocat",
+			repo:       "no-branch-repo",
+			mockStatus: 200,
+			mockBody: `{
+				"name": "no-branch-repo",
+				"full_name": "octocat/no-branch-repo",
+				"owner": {"login": "octocat"},
+				"default_branch": "",
+				"size": 1024,
 				"fork": false,
 				"archived": false,
 				"mirror_url": ""
