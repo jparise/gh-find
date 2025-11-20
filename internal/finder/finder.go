@@ -284,13 +284,11 @@ func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *O
 
 // parseRepoSpec parses "owner" or "owner/repo" format.
 func parseRepoSpec(spec string) (owner, repo string, err error) {
-	parts := strings.Split(spec, "/")
-	switch len(parts) {
-	case 1:
-		return parts[0], "", nil
-	case 2:
-		return parts[0], parts[1], nil
-	default:
+	owner, repo, found := strings.Cut(spec, "/")
+
+	if owner == "" || (found && (repo == "" || strings.Contains(repo, "/"))) {
 		return "", "", fmt.Errorf("invalid repo spec: %s (expected username or username/repo)", spec)
 	}
+
+	return owner, repo, nil
 }

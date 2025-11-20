@@ -57,11 +57,24 @@ func TestParseRepoSpec(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:      "empty string",
-			spec:      "",
-			wantOwner: "",
-			wantRepo:  "",
-			wantErr:   false,
+			name:    "empty string",
+			spec:    "",
+			wantErr: true,
+		},
+		{
+			name:    "just slash",
+			spec:    "/",
+			wantErr: true,
+		},
+		{
+			name:    "empty owner",
+			spec:    "/repo",
+			wantErr: true,
+		},
+		{
+			name:    "empty repo",
+			spec:    "owner/",
+			wantErr: true,
 		},
 	}
 
