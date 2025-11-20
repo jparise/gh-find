@@ -135,6 +135,51 @@ func TestJobsCount(t *testing.T) {
 	}
 }
 
+func TestExtensionsFlag(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		want   []string
+	}{
+		{
+			name:   "single extension with dot",
+			values: []string{".go"},
+			want:   []string{".go"},
+		},
+		{
+			name:   "single extension without dot",
+			values: []string{"go"},
+			want:   []string{".go"},
+		},
+		{
+			name:   "mixed extensions",
+			values: []string{".go", "md", ".txt", "js"},
+			want:   []string{".go", ".md", ".txt", ".js"},
+		},
+		{
+			name:   "empty extension",
+			values: []string{""},
+			want:   []string{"."},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var f extensionsFlag
+			for _, v := range tt.values {
+				if err := f.Set(v); err != nil {
+					t.Errorf("extensionsFlag.Set(%q) unexpected error: %v", v, err)
+					return
+				}
+			}
+
+			if !reflect.DeepEqual([]string(f), tt.want) {
+				t.Errorf("extensionsFlag = %v, want %v", f, tt.want)
+			}
+		})
+	}
+}
+
 func TestRepoTypes(t *testing.T) {
 	tests := []struct {
 		name    string
