@@ -184,8 +184,8 @@ gh find --cache-ttl 1h "*.go" cli
 Control concurrency with `-j/--jobs` (default: 10):
 
 ```bash
-gh find -j 20 "*.go" myorg    # Faster (uses rate limit faster)
-gh find -j 5 "*.go" myorg     # Slower (conserves rate limit)
+gh find -j 20 "*.go" cli    # Faster (uses rate limit faster)
+gh find -j 5 "*.go" cli     # Slower (conserves rate limit)
 ```
 
 GitHub API rate limits:
@@ -196,12 +196,7 @@ Each search uses 1 request per repository (plus 1 for listing repos). Cached req
 
 ## Known Limitations
 
-GitHub's Git Trees API truncates responses for repositories with >100,000 files or >7MB tree data. Results will be partial with a warning:
-
-```
-Warning: username/repo has >100k files, results incomplete
-```
-
+[GitHub's Git Trees API](https://docs.github.com/en/rest/git/trees) truncates responses for repositories with >100,000 files or >7MB tree data. Results will be partial with a warning.
 
 ## Troubleshooting
 
@@ -209,8 +204,8 @@ Warning: username/repo has >100k files, results incomplete
 
 **"Pattern matching not working"** - Patterns match basename by default. Use `-p` for full path matching:
 ```bash
-gh find -p "cmd/*.go" cli/cli    # Full path
-gh find "*.go" cli/cli            # Basename
+gh find -p "cmd/*.go" cli/cli   # Full path
+gh find "*.go" cli/cli          # Basename
 ```
 
 **"Rate limit exceeded"** - Wait for reset, use cache (enabled by default), or reduce concurrency with `-j 5`.
