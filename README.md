@@ -76,7 +76,7 @@ gh find -t x "*.sh" cli/cli
 # Filter by size (files over 50KB)
 gh find --min-size 50k "*.go" golang/go
 
-# Include forks and archives
+# Include forks and archives (default only searches source repos)
 gh find --repo-types sources,forks,archives "*.md" cli
 ```
 
@@ -130,11 +130,11 @@ Glob syntax: `*` (any chars), `**` (with `/`), `?` (single char), `[abc]` (char 
 #### Repository Filtering
 - `--repo-types type[,type...]` - Repository types to include when expanding owners (default: `sources`)
   - Valid types: `sources`, `forks`, `archives`, `mirrors`, `all`
-  - Only filters owner expansion (e.g., `cli`). Does NOT filter explicitly specified repos (e.g., `cli/archived-fork`)
-  - See [Repository Filtering](#repository-filtering-1) for details
+  - Only affects owner expansion (e.g., `cli` → all repos). Explicitly specified repos (e.g., `cli/archived-fork`) are always included
+  - Examples: `--repo-types sources,forks,archives` or `--repo-types all`
 
 #### Performance
-- `-j, --jobs N` - Maximum concurrent API requests (default: 10)
+- `-j, --jobs N` - Maximum concurrent API requests (default: 10, max: 100)
   - Increase for faster searches: `-j 20`
   - Decrease if hitting rate limits: `-j 5`
 
@@ -147,20 +147,6 @@ Glob syntax: `*` (any chars), `**` (with `/`), `?` (single char), `[abc]` (char 
 - `-c, --color mode` - Colorize output: `auto`, `always`, `never` (default: `auto`)
 - `--hyperlink mode` - Hyperlink output: `auto`, `always`, `never` (default: `auto`)
   - `auto` only enables hyperlinks when color is also enabled
-
-## Repository Filtering
-
-Default: source repositories only (excludes forks, archives, mirrors).
-
-```bash
-# Include forks and archives
-gh find --repo-types sources,forks,archives "*.go" cli
-
-# Everything
-gh find --repo-types all "*.js" facebook
-```
-
-Note: `--repo-types` only filters owner expansion (`cli` → all repos). Explicitly specified repos (`cli/archived-fork`) are always included.
 
 ## Caching
 
