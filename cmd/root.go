@@ -234,14 +234,16 @@ multiple repositories, the first argument is the pattern and the rest are
 repositories.
 
 <repository> can be:
-  <owner>        Search all repositories for a user or organization
-  <owner>/<repo> Search a specific repository
+  <owner>             Search all repositories for a user or organization
+  <owner>/<repo>      Search a specific repository
+  <owner>/<repo>@<ref> Search a specific repository at a branch, tag, or commit
 
 You can specify multiple repositories to search across them all.
 
 Examples:
   gh find "*.go" cli
   gh find "*.go" cli/cli cli/go-gh
+  gh find "*.go" cli/cli@trunk
   gh find -p "**/*_test.go" golang/go
   gh find "*" cli/cli cli/go-gh
   gh find -e go -e md cli
@@ -352,24 +354,51 @@ func parseByteSize(s string) (int64, error) {
 	return num * multiplier, nil
 }
 
+// parseRepoSpec parses "owner", "owner/repo", or "owner/repo@ref" format.
+func parseRepoSpec(spec string) (finder.RepoSpec, error) {
+	path, ref, _ := strings.Cut(spec, "@")
+	owner, repo, hasRepo := strings.Cut(path, "/")
+
+	if owner == "" || (hasRepo && (repo == "" || strings.Contains(repo, "/"))) {
+		return finder.RepoSpec{}, fmt.Errorf("invalid repo spec: %s (expected username or username/repo)", spec)
+	}
+	if ref != "" && !hasRepo {
+		return finder.RepoSpec{}, fmt.Errorf("cannot specify ref for owner expansion: %s (use owner/repo@ref)", spec)
+	}
+
+	return finder.RepoSpec{Owner: owner, Repo: repo, Ref: ref}, nil
+}
+
 // parseArgs parses command-line arguments into a pattern and repository specs.
-func parseArgs(args []string) (pattern string, repoSpecs []string, err error) {
+func parseArgs(args []string) (pattern string, repoSpecs []finder.RepoSpec, err error) {
 	if len(args) == 0 {
 		return "", nil, fmt.Errorf("at least one repository is required")
 	}
+
+	var specArgs []string
 
 	// Single arg: it's a repo (pattern defaults to "*")
 	// Multiple args: first is pattern, rest are repos
 	if len(args) == 1 {
 		pattern = "*"
-		repoSpecs = args
+		specArgs = args
 	} else {
 		pattern = args[0]
-		repoSpecs = args[1:]
+		specArgs = args[1:]
 
 		if pattern == "" {
 			pattern = "*"
 		}
+	}
+
+	// Parse each repo spec string into a RepoSpec
+	repoSpecs = make([]finder.RepoSpec, len(specArgs))
+	for i, s := range specArgs {
+		spec, err := parseRepoSpec(s)
+		if err != nil {
+			return "", nil, err
+		}
+		repoSpecs[i] = spec
 	}
 
 	return pattern, repoSpecs, nil

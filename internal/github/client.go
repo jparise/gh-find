@@ -118,7 +118,7 @@ func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([
 	// aren't natively supported by the GitHub API.
 	filtered := make([]Repository, 0, len(allRepos))
 	for _, repo := range allRepos {
-		if repo.Size == 0 || repo.DefaultBranch == "" {
+		if repo.Size == 0 || repo.Ref == "" {
 			continue
 		}
 
@@ -206,7 +206,7 @@ func (c *Client) GetRepo(ctx context.Context, owner, repo string) (Repository, e
 	if result.Size == 0 {
 		return Repository{}, fmt.Errorf("repository is empty (no commits yet)")
 	}
-	if result.DefaultBranch == "" {
+	if result.Ref == "" {
 		return Repository{}, fmt.Errorf("repository has no default branch")
 	}
 
@@ -217,13 +217,13 @@ func (c *Client) GetRepo(ctx context.Context, owner, repo string) (Repository, e
 func (c *Client) GetTree(ctx context.Context, repo Repository) (*TreeResponse, error) {
 	var tree TreeResponse
 
-	// Fetch the tree for the default branch with recursive flag
+	// Fetch the tree for the specified ref (branch/tag/SHA) with recursive flag
 	endpoint := fmt.Sprintf("repos/%s/%s/git/trees/%s?recursive=1",
-		repo.Owner, repo.Name, repo.DefaultBranch)
+		repo.Owner, repo.Name, repo.Ref)
 
 	err := c.rest.DoWithContext(ctx, "GET", endpoint, nil, &tree)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get tree for %s: %w", repo.FullName, err)
+		return nil, fmt.Errorf("failed to get tree for %s@%s: %w", repo.FullName, repo.Ref, err)
 	}
 
 	return &tree, nil

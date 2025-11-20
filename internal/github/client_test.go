@@ -757,9 +757,9 @@ func TestGetTree(t *testing.T) {
 		{
 			name: "small tree",
 			repo: Repository{
-				Owner:         "octocat",
-				Name:          "Hello-World",
-				DefaultBranch: "main",
+				Owner: "octocat",
+				Name:  "Hello-World",
+				Ref:   "main",
 			},
 			mockStatus: 200,
 			mockBody: `{
@@ -778,9 +778,9 @@ func TestGetTree(t *testing.T) {
 		{
 			name: "truncated tree",
 			repo: Repository{
-				Owner:         "octocat",
-				Name:          "huge-repo",
-				DefaultBranch: "main",
+				Owner: "octocat",
+				Name:  "huge-repo",
+				Ref:   "main",
 			},
 			mockStatus: 200,
 			mockBody: `{
@@ -798,9 +798,9 @@ func TestGetTree(t *testing.T) {
 		{
 			name: "empty repository",
 			repo: Repository{
-				Owner:         "octocat",
-				Name:          "empty-repo",
-				DefaultBranch: "main",
+				Owner: "octocat",
+				Name:  "empty-repo",
+				Ref:   "main",
 			},
 			mockStatus: 200,
 			mockBody: `{
@@ -816,9 +816,9 @@ func TestGetTree(t *testing.T) {
 		{
 			name: "invalid branch",
 			repo: Repository{
-				Owner:         "octocat",
-				Name:          "repo",
-				DefaultBranch: "nonexistent",
+				Owner: "octocat",
+				Name:  "repo",
+				Ref:   "nonexistent",
 			},
 			mockStatus:    404,
 			mockBody:      `{"message": "Not Found"}`,
@@ -833,7 +833,7 @@ func TestGetTree(t *testing.T) {
 			assertMocksCalled(t)
 
 			gock.New("https://api.github.com").
-				Get("/repos/"+tt.repo.Owner+"/"+tt.repo.Name+"/git/trees/"+tt.repo.DefaultBranch).
+				Get("/repos/"+tt.repo.Owner+"/"+tt.repo.Name+"/git/trees/"+tt.repo.Ref).
 				MatchParam("recursive", "1").
 				Reply(tt.mockStatus).
 				JSON(tt.mockBody)

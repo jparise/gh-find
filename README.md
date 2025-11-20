@@ -7,6 +7,7 @@
 ## Features
 
 - Glob patterns (`**/*.go`, `*.test.js`) instead of regex
+- Search specific branches, tags, or commits (`owner/repo@ref`)
 - Concurrent search across multiple repositories
 - Automatic caching reduces API calls
 - Filter by repository type (sources, forks, archives, mirrors)
@@ -46,6 +47,22 @@ gh find "*.go" cli/cli golang/go
 
 # Search all repos under an owner (user or organization)
 gh find "*.md" torvalds
+```
+
+### Branches, Tags, and Commits
+
+```bash
+# Search a specific branch
+gh find "*.go" cli/cli@trunk
+
+# Search a tag
+gh find "*.go" cli/cli@v2.40.0
+
+# Search a commit SHA
+gh find "*.go" golang/go@abc123def
+
+# Search different refs in different repos
+gh find "*.go" cli/cli@main golang/go@release-branch.go1.21
 ```
 
 ### Pattern Matching
@@ -91,12 +108,15 @@ gh find [<pattern>] <repository>... [flags]
 - `pattern` - Glob pattern (optional, defaults to `*` for single repo)
 - `repository` - One or more repositories to search:
   - `owner` - All repos for a user or organization
-  - `owner/repo` - Specific repository
+  - `owner/repo` - Specific repository (uses default branch)
+  - `owner/repo@ref` - Specific repository at branch, tag, or commit SHA
 
 ```bash
 gh find cli/cli                      # Single repo: defaults to "*"
 gh find "*.go" cli/cli               # Single repo: explicit pattern
 gh find "*.go" cli golang/go         # Multiple repos: pattern required
+gh find "*.go" cli/cli@trunk         # Specific repository branch
+gh find "*.go" cli/cli@v2.40.0       # Specific repository tag
 ```
 
 ### Pattern Matching

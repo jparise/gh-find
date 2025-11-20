@@ -7,15 +7,16 @@ import (
 
 // Repository represents a GitHub repository.
 type Repository struct {
-	Owner         string `json:"-"`
-	Name          string `json:"name"`
-	FullName      string `json:"full_name"`
-	DefaultBranch string `json:"default_branch"`
-	URL           string `json:"html_url"`
-	Size          int    `json:"size"`
-	Fork          bool   `json:"fork"`
-	Archived      bool   `json:"archived"`
-	MirrorURL     string `json:"mirror_url"`
+	Owner       string `json:"-"`
+	Name        string `json:"name"`
+	FullName    string `json:"full_name"`
+	Ref         string `json:"default_branch"`
+	ExplicitRef bool   `json:"-"`
+	URL         string `json:"html_url"`
+	Size        int    `json:"size"`
+	Fork        bool   `json:"fork"`
+	Archived    bool   `json:"archived"`
+	MirrorURL   string `json:"mirror_url"`
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for Repository.
