@@ -83,7 +83,7 @@ gh find --repo-types sources,forks,archives "*.md" cli
 ## Usage
 
 ```
-gh-find [<pattern>] <repository>... [flags]
+gh find [<pattern>] <repository>... [flags]
 ```
 
 ### Arguments
