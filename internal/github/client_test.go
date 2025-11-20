@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,25 +13,94 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// Disable real HTTP requests during tests
 	gock.DisableNetworking()
 	os.Exit(m.Run())
 }
 
+// testClient creates a new client for testing with sensible defaults.
+func testClient(t *testing.T) *Client {
+	t.Helper()
+	client, err := NewClient(ClientOptions{
+		AuthToken:    "fake-token",
+		DisableCache: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	return client
+}
+
+// assertMocksCalled registers cleanup to disable gock and verify all mocks were called.
+func assertMocksCalled(t *testing.T) {
+	t.Helper()
+	t.Cleanup(gock.Off)
+	t.Cleanup(func() {
+		if !gock.IsDone() {
+			t.Errorf("not all mocks were called: %v", gock.Pending())
+		}
+	})
+}
+
+// mockOwnerType sets up a gock mock for the GET /users/{username} endpoint.
+func mockOwnerType(username, ownerType string) {
+	gock.New("https://api.github.com").
+		Get("/users/" + username).
+		Reply(200).
+		JSON(fmt.Sprintf(`{"type": %q, "login": %q}`, ownerType, username))
+}
+
+// assertError checks if an error matches expectations and reports failure.
+func assertError(t *testing.T, err error, wantErr bool, operation string) bool {
+	t.Helper()
+	if (err != nil) != wantErr {
+		t.Errorf("%s error = %v, wantErr %v", operation, err, wantErr)
+		return false
+	}
+	return true
+}
+
+// repoFields contains fields for building repository JSON.
+type repoFields struct {
+	name      string
+	branch    string
+	size      int
+	fork      bool
+	archived  bool
+	mirrorURL string
+}
+
+// repoJSON creates a JSON string for a repository with the given owner and fields.
+func repoJSON(owner string, fields repoFields) string {
+	return fmt.Sprintf(
+		`{"name": %q, "full_name": %q, "owner": {"login": %q}, "default_branch": %q, "size": %d, "fork": %t, "archived": %t, "mirror_url": %q}`,
+		fields.name, owner+"/"+fields.name, owner, fields.branch, fields.size, fields.fork, fields.archived, fields.mirrorURL,
+	)
+}
+
+// reposJSON creates a JSON array of repositories for the given owner.
+func reposJSON(owner string, repos ...repoFields) string {
+	if len(repos) == 0 {
+		return "[]"
+	}
+	parts := make([]string, len(repos))
+	for i, r := range repos {
+		parts[i] = repoJSON(owner, r)
+	}
+	return "[" + strings.Join(parts, ",") + "]"
+}
+
 // generateRepoPage creates a JSON array of N repositories for testing pagination.
 func generateRepoPage(owner string, startNum, count int) string {
-	repos := make([]string, count)
+	repos := make([]repoFields, count)
 	for i := range count {
 		repoNum := startNum + i
-		//nolint:gocritic // JSON template requires literal quoted strings
-		repos[i] = fmt.Sprintf(`{"name": "repo%d", "full_name": "%s/repo%d", "owner": {"login": "%s"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""}`,
-			repoNum, owner, repoNum, owner)
+		repos[i] = repoFields{
+			name:   fmt.Sprintf("repo%d", repoNum),
+			branch: "main",
+			size:   1024,
+		}
 	}
-	result := "[" + repos[0]
-	for i := 1; i < len(repos); i++ {
-		result += "," + repos[i]
-	}
-	return result + "]"
+	return reposJSON(owner, repos...)
 }
 
 // TestNewClient tests client initialization with various options.
@@ -85,8 +155,7 @@ func TestNewClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client, err := NewClient(tt.opts)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
+			if !assertError(t, err, tt.wantErr, "NewClient()") {
 				return
 			}
 			if !tt.wantErr && client == nil {
@@ -251,33 +320,22 @@ func TestGetOwnerType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Cleanup(gock.Off)
+			assertMocksCalled(t)
 
 			gock.New("https://api.github.com").
 				Get("/users/" + tt.username).
 				Reply(tt.mockStatus).
 				JSON(tt.mockBody)
 
-			client, err := NewClient(ClientOptions{
-				AuthToken:    "fake-token",
-				DisableCache: true,
-			})
-			if err != nil {
-				t.Fatalf("failed to create client: %v", err)
-			}
+			client := testClient(t)
 
 			got, err := client.GetOwnerType(context.Background(), tt.username)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetOwnerType() error = %v, wantErr %v", err, tt.wantErr)
+			if !assertError(t, err, tt.wantErr, "GetOwnerType()") {
 				return
 			}
 
 			if !tt.wantErr && got != tt.want {
 				t.Errorf("GetOwnerType() = %v, want %v", got, tt.want)
-			}
-
-			if !gock.IsDone() {
-				t.Errorf("not all mocks were called: %v", gock.Pending())
 			}
 		})
 	}
@@ -285,25 +343,19 @@ func TestGetOwnerType(t *testing.T) {
 
 // TestGetOwnerType_ContextCanceled tests context cancellation.
 func TestGetOwnerType_ContextCanceled(t *testing.T) {
-	t.Cleanup(gock.Off)
+	assertMocksCalled(t)
 
 	gock.New("https://api.github.com").
 		Get("/users/octocat").
 		Reply(200).
 		JSON(`{"type": "User"}`)
 
-	client, err := NewClient(ClientOptions{
-		AuthToken:    "fake-token",
-		DisableCache: true,
-	})
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
+	client := testClient(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	_, err = client.GetOwnerType(ctx, "octocat")
+	_, err := client.GetOwnerType(ctx, "octocat")
 	if err == nil {
 		t.Error("expected context canceled error")
 	}
@@ -328,7 +380,7 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "User",
 			mockPages: []string{
 				// Only 1 repo (less than 100) - pagination stops after this
-				`[{"name": "repo1", "full_name": "octocat/repo1", "owner": {"login": "octocat"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""}]`,
+				reposJSON("octocat", repoFields{name: "repo1", branch: "main", size: 1024}),
 			},
 			wantRepoCount: 1,
 			wantErr:       false,
@@ -340,7 +392,7 @@ func TestListRepos(t *testing.T) {
 			mockOwnerType: "Organization",
 			mockPages: []string{
 				// Only 1 repo (less than 100) - pagination stops after this
-				`[{"name": "repo1", "full_name": "github/repo1", "owner": {"login": "github"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""}]`,
+				reposJSON("github", repoFields{name: "repo1", branch: "main", size: 1024}),
 			},
 			wantRepoCount: 1,
 			wantErr:       false,
@@ -351,7 +403,7 @@ func TestListRepos(t *testing.T) {
 			repoTypes:     RepoTypes{Sources: true}, // Default: sources only
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[]`,
+				reposJSON("emptyuser"),
 			},
 			wantRepoCount: 0,
 			wantErr:       false,
@@ -365,7 +417,7 @@ func TestListRepos(t *testing.T) {
 				// First page: exactly pageSize repos (full page)
 				generateRepoPage("manyrepos", 1, pageSize),
 				// Second page: partial (triggers page++ and then stops)
-				`[{"name": "repo101", "full_name": "manyrepos/repo101", "owner": {"login": "manyrepos"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""}]`,
+				reposJSON("manyrepos", repoFields{name: "repo101", branch: "main", size: 1024}),
 			},
 			wantRepoCount: pageSize + 1,
 			wantErr:       false,
@@ -376,11 +428,11 @@ func TestListRepos(t *testing.T) {
 			repoTypes:     RepoTypes{Sources: true},
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[
-					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
-				]`,
+				reposJSON("filtertest",
+					repoFields{name: "source-repo", branch: "main", size: 1024},
+					repoFields{name: "fork-repo", branch: "main", size: 1024, fork: true},
+					repoFields{name: "mirror-repo", branch: "main", size: 1024, mirrorURL: "https://example.com/repo.git"},
+				),
 			},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"source-repo"},
@@ -392,11 +444,11 @@ func TestListRepos(t *testing.T) {
 			repoTypes:     RepoTypes{Forks: true},
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[
-					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
-				]`,
+				reposJSON("filtertest",
+					repoFields{name: "source-repo", branch: "main", size: 1024},
+					repoFields{name: "fork-repo", branch: "main", size: 1024, fork: true},
+					repoFields{name: "mirror-repo", branch: "main", size: 1024, mirrorURL: "https://example.com/repo.git"},
+				),
 			},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"fork-repo"},
@@ -408,11 +460,11 @@ func TestListRepos(t *testing.T) {
 			repoTypes:     RepoTypes{Mirrors: true},
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[
-					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "mirror-repo", "full_name": "filtertest/mirror-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": "https://example.com/repo.git"}
-				]`,
+				reposJSON("filtertest",
+					repoFields{name: "source-repo", branch: "main", size: 1024},
+					repoFields{name: "fork-repo", branch: "main", size: 1024, fork: true},
+					repoFields{name: "mirror-repo", branch: "main", size: 1024, mirrorURL: "https://example.com/repo.git"},
+				),
 			},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"mirror-repo"},
@@ -424,12 +476,12 @@ func TestListRepos(t *testing.T) {
 			repoTypes:     RepoTypes{Sources: true, Archives: true},
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[
-					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": true, "mirror_url": ""},
-					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": true, "mirror_url": ""}
-				]`,
+				reposJSON("filtertest",
+					repoFields{name: "active-source", branch: "main", size: 1024},
+					repoFields{name: "archived-source", branch: "main", size: 1024, archived: true},
+					repoFields{name: "active-fork", branch: "main", size: 1024, fork: true},
+					repoFields{name: "archived-fork", branch: "main", size: 1024, fork: true, archived: true},
+				),
 			},
 			wantRepoCount: 2,
 			wantRepoNames: []string{"active-source", "archived-source"},
@@ -441,10 +493,10 @@ func TestListRepos(t *testing.T) {
 			repoTypes:     RepoTypes{Sources: true},
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[
-					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": true, "mirror_url": ""}
-				]`,
+				reposJSON("filtertest",
+					repoFields{name: "active-source", branch: "main", size: 1024},
+					repoFields{name: "archived-source", branch: "main", size: 1024, archived: true},
+				),
 			},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"active-source"},
@@ -456,11 +508,11 @@ func TestListRepos(t *testing.T) {
 			repoTypes:     RepoTypes{Forks: true, Archives: true},
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[
-					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": true, "mirror_url": ""}
-				]`,
+				reposJSON("filtertest",
+					repoFields{name: "active-source", branch: "main", size: 1024},
+					repoFields{name: "active-fork", branch: "main", size: 1024, fork: true},
+					repoFields{name: "archived-fork", branch: "main", size: 1024, fork: true, archived: true},
+				),
 			},
 			wantRepoCount: 2,
 			wantRepoNames: []string{"active-fork", "archived-fork"},
@@ -472,27 +524,27 @@ func TestListRepos(t *testing.T) {
 			repoTypes:     RepoTypes{Sources: true, Forks: true},
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[
-					{"name": "active-source", "full_name": "filtertest/active-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "archived-source", "full_name": "filtertest/archived-source", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": true, "mirror_url": ""},
-					{"name": "active-fork", "full_name": "filtertest/active-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""},
-					{"name": "archived-fork", "full_name": "filtertest/archived-fork", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": true, "mirror_url": ""}
-				]`,
+				reposJSON("filtertest",
+					repoFields{name: "active-source", branch: "main", size: 1024},
+					repoFields{name: "archived-source", branch: "main", size: 1024, archived: true},
+					repoFields{name: "active-fork", branch: "main", size: 1024, fork: true},
+					repoFields{name: "archived-fork", branch: "main", size: 1024, fork: true, archived: true},
+				),
 			},
 			wantRepoCount: 2,
 			wantRepoNames: []string{"active-source", "active-fork"},
 			wantErr:       false,
 		},
 		{
-			name:          "empty repo types - returns nothing",
+			name:          "empty repo types - filters all repos when no types selected",
 			username:      "filtertest",
 			repoTypes:     RepoTypes{},
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[
-					{"name": "source-repo", "full_name": "filtertest/source-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "fork-repo", "full_name": "filtertest/fork-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": true, "archived": false, "mirror_url": ""}
-				]`,
+				reposJSON("filtertest",
+					repoFields{name: "source-repo", branch: "main", size: 1024},
+					repoFields{name: "fork-repo", branch: "main", size: 1024, fork: true},
+				),
 			},
 			wantRepoCount: 0,
 			wantRepoNames: nil,
@@ -504,10 +556,10 @@ func TestListRepos(t *testing.T) {
 			repoTypes:     RepoTypes{Sources: true},
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[
-					{"name": "normal-repo", "full_name": "filtertest/normal-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "empty-repo", "full_name": "filtertest/empty-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 0, "fork": false, "archived": false, "mirror_url": ""}
-				]`,
+				reposJSON("filtertest",
+					repoFields{name: "normal-repo", branch: "main", size: 1024},
+					repoFields{name: "empty-repo", branch: "main", size: 0},
+				),
 			},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"normal-repo"},
@@ -519,10 +571,10 @@ func TestListRepos(t *testing.T) {
 			repoTypes:     RepoTypes{Sources: true},
 			mockOwnerType: "User",
 			mockPages: []string{
-				`[
-					{"name": "normal-repo", "full_name": "filtertest/normal-repo", "owner": {"login": "filtertest"}, "default_branch": "main", "size": 1024, "fork": false, "archived": false, "mirror_url": ""},
-					{"name": "no-branch-repo", "full_name": "filtertest/no-branch-repo", "owner": {"login": "filtertest"}, "default_branch": "", "size": 1024, "fork": false, "archived": false, "mirror_url": ""}
-				]`,
+				reposJSON("filtertest",
+					repoFields{name: "normal-repo", branch: "main", size: 1024},
+					repoFields{name: "no-branch-repo", branch: "", size: 1024},
+				),
 			},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"normal-repo"},
@@ -532,13 +584,10 @@ func TestListRepos(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Cleanup(gock.Off)
+			assertMocksCalled(t)
 
 			// Mock owner type check
-			gock.New("https://api.github.com").
-				Get("/users/" + tt.username).
-				Reply(200).
-				JSON(`{"type": "` + tt.mockOwnerType + `", "login": "` + tt.username + `"}`)
+			mockOwnerType(tt.username, tt.mockOwnerType)
 
 			// Determine endpoint based on owner type
 			var endpoint string
@@ -559,17 +608,10 @@ func TestListRepos(t *testing.T) {
 					JSON(pageBody)
 			}
 
-			client, err := NewClient(ClientOptions{
-				AuthToken:    "fake-token",
-				DisableCache: true,
-			})
-			if err != nil {
-				t.Fatalf("failed to create client: %v", err)
-			}
+			client := testClient(t)
 
 			repos, err := client.ListRepos(context.Background(), tt.username, tt.repoTypes)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ListRepos() error = %v, wantErr %v", err, tt.wantErr)
+			if !assertError(t, err, tt.wantErr, "ListRepos()") {
 				return
 			}
 
@@ -579,26 +621,16 @@ func TestListRepos(t *testing.T) {
 
 			// If specific repo names are provided, verify them
 			if !tt.wantErr && len(tt.wantRepoNames) > 0 {
-				gotNames := make(map[string]bool)
-				for _, repo := range repos {
-					gotNames[repo.Name] = true
+				gotNames := make([]string, len(repos))
+				for i, repo := range repos {
+					gotNames[i] = repo.Name
 				}
-
-				for _, wantName := range tt.wantRepoNames {
-					if !gotNames[wantName] {
-						t.Errorf("ListRepos() missing expected repo: %s", wantName)
-					}
+				slices.Sort(gotNames)
+				wantNames := slices.Clone(tt.wantRepoNames)
+				slices.Sort(wantNames)
+				if !slices.Equal(gotNames, wantNames) {
+					t.Errorf("ListRepos() repo names = %v, want %v", gotNames, wantNames)
 				}
-
-				for gotName := range gotNames {
-					if !slices.Contains(tt.wantRepoNames, gotName) {
-						t.Errorf("ListRepos() returned unexpected repo: %s", gotName)
-					}
-				}
-			}
-
-			if !gock.IsDone() {
-				t.Errorf("not all mocks were called: %v", gock.Pending())
 			}
 		})
 	}
@@ -685,24 +717,17 @@ func TestGetRepo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Cleanup(gock.Off)
+			assertMocksCalled(t)
 
 			gock.New("https://api.github.com").
 				Get("/repos/" + tt.owner + "/" + tt.repo).
 				Reply(tt.mockStatus).
 				JSON(tt.mockBody)
 
-			client, err := NewClient(ClientOptions{
-				AuthToken:    "fake-token",
-				DisableCache: true,
-			})
-			if err != nil {
-				t.Fatalf("failed to create client: %v", err)
-			}
+			client := testClient(t)
 
 			repo, err := client.GetRepo(context.Background(), tt.owner, tt.repo)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetRepo() error = %v, wantErr %v", err, tt.wantErr)
+			if !assertError(t, err, tt.wantErr, "GetRepo()") {
 				return
 			}
 
@@ -713,10 +738,6 @@ func TestGetRepo(t *testing.T) {
 				if repo.Owner != tt.owner {
 					t.Errorf("GetRepo() repo.Owner = %v, want %v", repo.Owner, tt.owner)
 				}
-			}
-
-			if !gock.IsDone() {
-				t.Errorf("not all mocks were called: %v", gock.Pending())
 			}
 		})
 	}
@@ -809,7 +830,7 @@ func TestGetTree(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Cleanup(gock.Off)
+			assertMocksCalled(t)
 
 			gock.New("https://api.github.com").
 				Get("/repos/"+tt.repo.Owner+"/"+tt.repo.Name+"/git/trees/"+tt.repo.DefaultBranch).
@@ -817,17 +838,10 @@ func TestGetTree(t *testing.T) {
 				Reply(tt.mockStatus).
 				JSON(tt.mockBody)
 
-			client, err := NewClient(ClientOptions{
-				AuthToken:    "fake-token",
-				DisableCache: true,
-			})
-			if err != nil {
-				t.Fatalf("failed to create client: %v", err)
-			}
+			client := testClient(t)
 
 			tree, err := client.GetTree(context.Background(), tt.repo)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetTree() error = %v, wantErr %v", err, tt.wantErr)
+			if !assertError(t, err, tt.wantErr, "GetTree()") {
 				return
 			}
 
@@ -838,10 +852,6 @@ func TestGetTree(t *testing.T) {
 				if len(tree.Tree) != tt.wantTreeSize {
 					t.Errorf("GetTree() tree size = %d, want %d", len(tree.Tree), tt.wantTreeSize)
 				}
-			}
-
-			if !gock.IsDone() {
-				t.Errorf("not all mocks were called: %v", gock.Pending())
 			}
 		})
 	}
