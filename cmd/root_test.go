@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/jparise/gh-find/internal/github"
@@ -63,6 +64,72 @@ func TestOutputMode(t *testing.T) {
 
 			if m != tt.want {
 				t.Errorf("outputMode.Set(%q) = %v, want %v", tt.value, m, tt.want)
+			}
+		})
+	}
+}
+
+func TestJobsCount(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+		want    jobsCount
+	}{
+		{
+			name:    "valid minimum",
+			value:   "1",
+			wantErr: false,
+			want:    jobsCount(1),
+		},
+		{
+			name:    "valid maximum",
+			value:   strconv.Itoa(maxJobs),
+			wantErr: false,
+			want:    jobsCount(maxJobs),
+		},
+		{
+			name:    "valid middle",
+			value:   "10",
+			wantErr: false,
+			want:    jobsCount(10),
+		},
+		{
+			name:    "invalid below range",
+			value:   "0",
+			wantErr: true,
+		},
+		{
+			name:    "invalid above range",
+			value:   strconv.Itoa(maxJobs + 1),
+			wantErr: true,
+		},
+		{
+			name:    "invalid non-numeric",
+			value:   "abc",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var j jobsCount
+			err := j.Set(tt.value)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("jobsCount.Set(%q) expected error, got nil", tt.value)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("jobsCount.Set(%q) unexpected error: %v", tt.value, err)
+				return
+			}
+
+			if j != tt.want {
+				t.Errorf("jobsCount.Set(%q) = %v, want %v", tt.value, j, tt.want)
 			}
 		})
 	}

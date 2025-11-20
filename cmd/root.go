@@ -18,6 +18,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	maxJobs = 100
+)
+
 // outputMode represents when to enable output features (color, hyperlinks, etc).
 type outputMode string
 
@@ -125,6 +129,28 @@ func (f *repoTypesFlag) Type() string {
 	return "types"
 }
 
+type jobsCount int
+
+func (j *jobsCount) Set(s string) error {
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return err
+	}
+	if v < 1 || v > maxJobs {
+		return fmt.Errorf("must be between 1 and %d", maxJobs)
+	}
+	*j = jobsCount(v)
+	return nil
+}
+
+func (j *jobsCount) String() string {
+	return strconv.Itoa(int(*j))
+}
+
+func (j *jobsCount) Type() string {
+	return "count"
+}
+
 var (
 	version = "dev"
 
@@ -141,7 +167,7 @@ var (
 	noCache    bool
 	cacheDir   string
 	cacheTTL   time.Duration
-	jobs       int
+	jobs       = jobsCount(10)
 )
 
 var rootCmd = &cobra.Command{
@@ -178,10 +204,6 @@ Examples:
 	Version: version,
 	Args:    cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if jobs < 1 || jobs > 100 {
-			return fmt.Errorf("--jobs must be between 1 and 100, got %d", jobs)
-		}
-
 		// Normalize file extension strings to ensure they start with a dot.
 		for i, ext := range extensions {
 			if !strings.HasPrefix(ext, ".") {
@@ -226,7 +248,7 @@ func init() {
 		"hyperlink output: auto, always, never")
 
 	// Performance & caching
-	rootCmd.Flags().IntVarP(&jobs, "jobs", "j", 10,
+	rootCmd.Flags().VarP(&jobs, "jobs", "j",
 		"maximum concurrent API requests")
 	rootCmd.Flags().BoolVar(&noCache, "no-cache", false,
 		"bypass cache, always fetch fresh data")
@@ -394,7 +416,7 @@ func run(cmd *cobra.Command, args []string) error {
 			CacheDir:     cacheDir,
 			CacheTTL:     cacheTTL,
 		},
-		Jobs: jobs,
+		Jobs: int(jobs),
 	}
 
 	// Create finder and run search
