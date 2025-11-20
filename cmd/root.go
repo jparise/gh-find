@@ -173,6 +173,31 @@ func (j *jobsCount) Type() string {
 	return "count"
 }
 
+type byteSize int64
+
+func (b *byteSize) Set(s string) error {
+	size, err := parseByteSize(s)
+	if err != nil {
+		return err
+	}
+	if size <= 0 {
+		return fmt.Errorf("must be greater than 0")
+	}
+	*b = byteSize(size)
+	return nil
+}
+
+func (b *byteSize) String() string {
+	if *b == 0 {
+		return ""
+	}
+	return strconv.FormatInt(int64(*b), 10)
+}
+
+func (b *byteSize) Type() string {
+	return "size"
+}
+
 var (
 	version = "dev"
 
@@ -184,8 +209,8 @@ var (
 	fullPath   bool
 	extensions extensionsFlag
 	excludes   []string
-	minSize    string
-	maxSize    string
+	minSize    byteSize
+	maxSize    byteSize
 	noCache    bool
 	cacheDir   string
 	cacheTTL   time.Duration
@@ -244,9 +269,9 @@ func init() {
 		"filter by file extension (can be specified multiple times)")
 	rootCmd.Flags().StringSliceVarP(&excludes, "exclude", "E", []string{},
 		"exclude patterns (can be specified multiple times)")
-	rootCmd.Flags().StringVar(&minSize, "min-size", "",
+	rootCmd.Flags().Var(&minSize, "min-size",
 		"minimum file size (e.g., 1M, 500k, 1GB)")
-	rootCmd.Flags().StringVar(&maxSize, "max-size", "",
+	rootCmd.Flags().Var(&maxSize, "max-size",
 		"maximum file size (e.g., 5M, 1GB)")
 
 	// Repository selection
@@ -381,33 +406,8 @@ func run(cmd *cobra.Command, args []string) error {
 		hyperlinks = terminal.IsColorEnabled() && colorize
 	}
 
-	// Parse size filters
-	var minSizeBytes, maxSizeBytes int64
-
-	if minSize != "" {
-		size, err := parseByteSize(minSize)
-		if err != nil {
-			return fmt.Errorf("invalid --min-size %q: %w", minSize, err)
-		}
-		if size == 0 {
-			return fmt.Errorf("--min-size must be greater than 0")
-		}
-		minSizeBytes = size
-	}
-
-	if maxSize != "" {
-		size, err := parseByteSize(maxSize)
-		if err != nil {
-			return fmt.Errorf("invalid --max-size %q: %w", maxSize, err)
-		}
-		if size == 0 {
-			return fmt.Errorf("--max-size must be greater than 0")
-		}
-		maxSizeBytes = size
-	}
-
 	// Validate that min <= max if both specified
-	if minSizeBytes > 0 && maxSizeBytes > 0 && minSizeBytes > maxSizeBytes {
+	if minSize > 0 && maxSize > 0 && minSize > maxSize {
 		return fmt.Errorf("--min-size cannot be greater than --max-size")
 	}
 
@@ -421,8 +421,8 @@ func run(cmd *cobra.Command, args []string) error {
 		FullPath:   fullPath,
 		Extensions: []string(extensions),
 		Excludes:   excludes,
-		MinSize:    minSizeBytes,
-		MaxSize:    maxSizeBytes,
+		MinSize:    int64(minSize),
+		MaxSize:    int64(maxSize),
 		ClientOpts: github.ClientOptions{
 			DisableCache: noCache,
 			CacheDir:     cacheDir,

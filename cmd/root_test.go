@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"reflect"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -135,6 +136,88 @@ func TestJobsCount(t *testing.T) {
 	}
 }
 
+func TestByteSize(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+		want    byteSize
+	}{
+		// Plain bytes
+		{name: "plain number", value: "1024", want: byteSize(1024)},
+		{name: "zero", value: "0", wantErr: true},
+		{name: "bytes suffix", value: "500b", want: byteSize(500)},
+		{name: "bytes uppercase", value: "500B", want: byteSize(500)},
+
+		// Kilobytes
+		{name: "kilobytes", value: "1k", want: byteSize(1024)},
+		{name: "kilobytes kb", value: "10kb", want: byteSize(10240)},
+		{name: "kilobytes uppercase", value: "5K", want: byteSize(5120)},
+		{name: "kilobytes kib", value: "2kib", want: byteSize(2048)},
+		{name: "kilobytes uppercase KB", value: "3KB", want: byteSize(3072)},
+
+		// Megabytes
+		{name: "megabytes", value: "1m", want: byteSize(1048576)},
+		{name: "megabytes mb", value: "5mb", want: byteSize(5242880)},
+		{name: "megabytes uppercase", value: "2M", want: byteSize(2097152)},
+		{name: "megabytes MiB", value: "3MiB", want: byteSize(3145728)},
+
+		// Gigabytes
+		{name: "gigabytes", value: "1g", want: byteSize(1073741824)},
+		{name: "gigabytes gb", value: "2gb", want: byteSize(2147483648)},
+		{name: "gigabytes uppercase", value: "1G", want: byteSize(1073741824)},
+		{name: "gigabytes GiB", value: "1GiB", want: byteSize(1073741824)},
+
+		// Terabytes
+		{name: "terabytes", value: "1t", want: byteSize(1099511627776)},
+		{name: "terabytes tb", value: "2tb", want: byteSize(2199023255552)},
+		{name: "terabytes TiB", value: "1TiB", want: byteSize(1099511627776)},
+
+		// Petabytes
+		{name: "petabytes", value: "1p", want: byteSize(1125899906842624)},
+		{name: "petabytes pb", value: "1pb", want: byteSize(1125899906842624)},
+		{name: "petabytes PiB", value: "1PiB", want: byteSize(1125899906842624)},
+
+		// Whitespace handling
+		{name: "leading whitespace", value: "  10m", want: byteSize(10485760)},
+		{name: "trailing whitespace", value: "10m  ", want: byteSize(10485760)},
+		{name: "whitespace around", value: "  10m  ", want: byteSize(10485760)},
+		{name: "whitespace before unit", value: "10 m", want: byteSize(10485760)},
+
+		// Error cases
+		{name: "empty string", value: "", wantErr: true},
+		{name: "invalid number", value: "abc", wantErr: true},
+		{name: "invalid unit", value: "10x", wantErr: true},
+		{name: "negative number", value: "-10m", wantErr: true},
+		{name: "just a unit", value: "mb", wantErr: true},
+		{name: "decimal rejected", value: "1.5k", wantErr: true},
+		{name: "overflow", value: "10000p", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var b byteSize
+			err := b.Set(tt.value)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("byteSize.Set(%q) expected error, got nil", tt.value)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("byteSize.Set(%q) unexpected error: %v", tt.value, err)
+				return
+			}
+
+			if b != tt.want {
+				t.Errorf("byteSize.Set(%q) = %v, want %v", tt.value, b, tt.want)
+			}
+		})
+	}
+}
+
 func TestExtensionsFlag(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -173,7 +256,7 @@ func TestExtensionsFlag(t *testing.T) {
 				}
 			}
 
-			if !reflect.DeepEqual([]string(f), tt.want) {
+			if !slices.Equal([]string(f), tt.want) {
 				t.Errorf("extensionsFlag = %v, want %v", f, tt.want)
 			}
 		})
@@ -312,7 +395,7 @@ func TestParseArgs(t *testing.T) {
 				t.Errorf("parseArgs(%v) pattern = %q, want %q", tt.args, pattern, tt.wantPattern)
 			}
 
-			if !reflect.DeepEqual(repos, tt.wantRepos) {
+			if !slices.Equal(repos, tt.wantRepos) {
 				t.Errorf("parseArgs(%v) = %v, want %v", tt.args, repos, tt.wantRepos)
 			}
 		})
