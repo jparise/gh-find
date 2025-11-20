@@ -84,6 +84,28 @@ func (f *fileTypesFlag) Type() string {
 	return "filetype"
 }
 
+type extensionsFlag []string
+
+func (e *extensionsFlag) String() string {
+	if e == nil || len(*e) == 0 {
+		return ""
+	}
+	return strings.Join(*e, ",")
+}
+
+func (e *extensionsFlag) Set(v string) error {
+	// Normalize to ensure it starts with a dot
+	if !strings.HasPrefix(v, ".") {
+		v = "." + v
+	}
+	*e = append(*e, v)
+	return nil
+}
+
+func (e *extensionsFlag) Type() string {
+	return "ext"
+}
+
 type repoTypesFlag github.RepoTypes
 
 func (f *repoTypesFlag) String() string {
@@ -160,7 +182,7 @@ var (
 	fileTypes  fileTypesFlag
 	ignoreCase bool
 	fullPath   bool
-	extensions []string
+	extensions extensionsFlag
 	excludes   []string
 	minSize    string
 	maxSize    string
@@ -203,17 +225,7 @@ Examples:
   gh find --min-size 10k --max-size 100k "*.go" cli/cli`,
 	Version: version,
 	Args:    cobra.MinimumNArgs(1),
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		// Normalize file extension strings to ensure they start with a dot.
-		for i, ext := range extensions {
-			if !strings.HasPrefix(ext, ".") {
-				extensions[i] = "." + ext
-			}
-		}
-
-		return nil
-	},
-	RunE: run,
+	RunE:    run,
 }
 
 func init() {
@@ -228,7 +240,7 @@ func init() {
 	// File filtering
 	rootCmd.Flags().VarP(&fileTypes, "type", "t",
 		"filter by file type: f/file, d/dir/directory, l/symlink, x/executable, s/submodule")
-	rootCmd.Flags().StringSliceVarP(&extensions, "extension", "e", []string{},
+	rootCmd.Flags().VarP(&extensions, "extension", "e",
 		"filter by file extension (can be specified multiple times)")
 	rootCmd.Flags().StringSliceVarP(&excludes, "exclude", "E", []string{},
 		"exclude patterns (can be specified multiple times)")
@@ -407,7 +419,7 @@ func run(cmd *cobra.Command, args []string) error {
 		FileTypes:  []github.FileType(fileTypes),
 		IgnoreCase: ignoreCase,
 		FullPath:   fullPath,
-		Extensions: extensions,
+		Extensions: []string(extensions),
 		Excludes:   excludes,
 		MinSize:    minSizeBytes,
 		MaxSize:    maxSizeBytes,
