@@ -118,7 +118,7 @@ func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([
 	// aren't natively supported by the GitHub API.
 	filtered := make([]Repository, 0, len(allRepos))
 	for _, repo := range allRepos {
-		if repo.Size == 0 {
+		if repo.Size == 0 || repo.DefaultBranch == "" {
 			continue
 		}
 
@@ -205,6 +205,9 @@ func (c *Client) GetRepo(ctx context.Context, owner, repo string) (Repository, e
 	}
 	if result.Size == 0 {
 		return Repository{}, fmt.Errorf("repository is empty (no commits yet)")
+	}
+	if result.DefaultBranch == "" {
+		return Repository{}, fmt.Errorf("repository has no default branch")
 	}
 
 	return result, nil
