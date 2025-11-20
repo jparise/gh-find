@@ -97,6 +97,19 @@ gh find --min-size 50k "*.go" golang/go
 gh find --repo-types sources,forks,archives "*.md" cli
 ```
 
+### Sorting Results
+
+```bash
+# Sort alphabetically
+gh find "*.go" cli/cli | sort
+
+# Reverse order
+gh find "*.go" cli/cli | sort -r
+
+# Sort by repo name, then path
+gh find "*.go" cli golang/go | sort -t: -k1,1 -k2
+```
+
 ## Usage
 
 ```
