@@ -478,7 +478,7 @@ func run(cmd *cobra.Command, args []string) error {
 	case outputNever:
 		hyperlinks = false
 	case outputAuto:
-		hyperlinks = terminal.IsColorEnabled() && colorize
+		hyperlinks = terminal.IsColorEnabled() && color != outputNever
 	}
 
 	// Validate that min <= max if both specified
