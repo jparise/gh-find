@@ -11,7 +11,7 @@
 - Concurrent search across multiple repositories
 - Automatic caching reduces API calls
 - Filter by repository type (sources, forks, archives, mirrors)
-- Filter by file type (`-t`), extension (`-e`), or size
+- Filter by file type (`-t`), extension (`-e`), size, or last modified date
 - Case-insensitive (`-i`) and full-path (`-p`) matching
 
 ## Installation
@@ -93,6 +93,15 @@ gh find -t x "*.sh" cli/cli
 # Filter by size (files over 50KB)
 gh find --min-size 50k "*.go" golang/go
 
+# Filter by last changed date (files changed in last 2 weeks)
+gh find --changed-within 2weeks "*.go" cli/cli
+
+# Filter by last changed date (files not changed in last month)
+gh find --changed-before 30days cli/cli
+
+# Combine filters (Go files changed this week over 10KB)
+gh find --newer 1week --min-size 10k "*.go" golang/go
+
 # Include forks and archives (default only searches source repos)
 gh find --repo-types sources,forks,archives "*.md" cli
 ```
@@ -159,6 +168,8 @@ Glob syntax: `*` (any chars), `**` (with `/`), `?` (single char), `[abc]` (char 
 - `-E, --exclude pattern` - Exclude files matching pattern (can be specified multiple times)
 - `--min-size size` - Minimum file size (e.g., `1M`, `500k`, `1GB`)
 - `--max-size size` - Maximum file size (e.g., `5M`, `1GB`)
+- `--changed-within duration` - Filter files changed within duration (e.g., `2weeks`, `1d`, `10h`, `2018-10-27`) [Alias: `--newer`]
+- `--changed-before duration` - Filter files changed before duration ago (e.g., `2weeks`, `1d`, `10h`, `2018-10-27`) [Alias: `--older`]
 
 #### Repository Filtering
 - `--repo-types type[,type...]` - Repository types to include when expanding owners (default: `sources`)
