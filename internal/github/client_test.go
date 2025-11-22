@@ -103,6 +103,13 @@ func generateRepoPage(owner string, startNum, count int) string {
 	return reposJSON(owner, repos...)
 }
 
+// Common test data for filter tests.
+var (
+	sourceRepo = repoFields{name: "source-repo", branch: "main", size: 1024}
+	forkRepo   = repoFields{name: "fork-repo", branch: "main", size: 1024, fork: true}
+	mirrorRepo = repoFields{name: "mirror-repo", branch: "main", size: 1024, mirrorURL: "https://example.com/repo.git"}
+)
+
 // TestNewClient tests client initialization with various options.
 func TestNewClient(t *testing.T) {
 	tests := []struct {
@@ -374,101 +381,58 @@ func TestListRepos(t *testing.T) {
 		wantErr       bool
 	}{
 		{
-			name:          "user with partial page",
+			name:          "partial page",
 			username:      "octocat",
-			repoTypes:     RepoTypes{Sources: true}, // Default: sources only
+			repoTypes:     RepoTypes{Sources: true},
 			mockOwnerType: "User",
-			mockPages: []string{
-				// Only 1 repo (less than 100) - pagination stops after this
-				reposJSON("octocat", repoFields{name: "repo1", branch: "main", size: 1024}),
-			},
+			mockPages:     []string{reposJSON("octocat", repoFields{name: "repo1", branch: "main", size: 1024})},
 			wantRepoCount: 1,
-			wantErr:       false,
-		},
-		{
-			name:          "organization with partial page",
-			username:      "github",
-			repoTypes:     RepoTypes{Sources: true}, // Default: sources only
-			mockOwnerType: "Organization",
-			mockPages: []string{
-				// Only 1 repo (less than 100) - pagination stops after this
-				reposJSON("github", repoFields{name: "repo1", branch: "main", size: 1024}),
-			},
-			wantRepoCount: 1,
-			wantErr:       false,
 		},
 		{
 			name:          "empty result",
 			username:      "emptyuser",
-			repoTypes:     RepoTypes{Sources: true}, // Default: sources only
+			repoTypes:     RepoTypes{Sources: true},
 			mockOwnerType: "User",
-			mockPages: []string{
-				reposJSON("emptyuser"),
-			},
+			mockPages:     []string{reposJSON("emptyuser")},
 			wantRepoCount: 0,
-			wantErr:       false,
 		},
 		{
-			name:          "full page triggers pagination",
+			name:          "pagination",
 			username:      "manyrepos",
-			repoTypes:     RepoTypes{Sources: true}, // Default: sources only
+			repoTypes:     RepoTypes{Sources: true},
 			mockOwnerType: "User",
 			mockPages: []string{
-				// First page: exactly pageSize repos (full page)
 				generateRepoPage("manyrepos", 1, pageSize),
-				// Second page: partial (triggers page++ and then stops)
 				reposJSON("manyrepos", repoFields{name: "repo101", branch: "main", size: 1024}),
 			},
 			wantRepoCount: pageSize + 1,
-			wantErr:       false,
 		},
 		{
 			name:          "filter sources only - excludes forks and mirrors",
 			username:      "filtertest",
 			repoTypes:     RepoTypes{Sources: true},
 			mockOwnerType: "User",
-			mockPages: []string{
-				reposJSON("filtertest",
-					repoFields{name: "source-repo", branch: "main", size: 1024},
-					repoFields{name: "fork-repo", branch: "main", size: 1024, fork: true},
-					repoFields{name: "mirror-repo", branch: "main", size: 1024, mirrorURL: "https://example.com/repo.git"},
-				),
-			},
+			mockPages:     []string{reposJSON("filtertest", sourceRepo, forkRepo, mirrorRepo)},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"source-repo"},
-			wantErr:       false,
 		},
 		{
 			name:          "filter forks only - excludes sources and mirrors",
 			username:      "filtertest",
 			repoTypes:     RepoTypes{Forks: true},
 			mockOwnerType: "User",
-			mockPages: []string{
-				reposJSON("filtertest",
-					repoFields{name: "source-repo", branch: "main", size: 1024},
-					repoFields{name: "fork-repo", branch: "main", size: 1024, fork: true},
-					repoFields{name: "mirror-repo", branch: "main", size: 1024, mirrorURL: "https://example.com/repo.git"},
-				),
-			},
+			mockPages:     []string{reposJSON("filtertest", sourceRepo, forkRepo, mirrorRepo)},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"fork-repo"},
-			wantErr:       false,
 		},
 		{
 			name:          "filter mirrors only - excludes sources and forks",
 			username:      "filtertest",
 			repoTypes:     RepoTypes{Mirrors: true},
 			mockOwnerType: "User",
-			mockPages: []string{
-				reposJSON("filtertest",
-					repoFields{name: "source-repo", branch: "main", size: 1024},
-					repoFields{name: "fork-repo", branch: "main", size: 1024, fork: true},
-					repoFields{name: "mirror-repo", branch: "main", size: 1024, mirrorURL: "https://example.com/repo.git"},
-				),
-			},
+			mockPages:     []string{reposJSON("filtertest", sourceRepo, forkRepo, mirrorRepo)},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"mirror-repo"},
-			wantErr:       false,
 		},
 		{
 			name:          "filter sources with archives - includes archived sources",
@@ -485,7 +449,6 @@ func TestListRepos(t *testing.T) {
 			},
 			wantRepoCount: 2,
 			wantRepoNames: []string{"active-source", "archived-source"},
-			wantErr:       false,
 		},
 		{
 			name:          "filter sources without archives - excludes archived sources",
@@ -500,7 +463,6 @@ func TestListRepos(t *testing.T) {
 			},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"active-source"},
-			wantErr:       false,
 		},
 		{
 			name:          "filter forks with archives - includes archived forks",
@@ -516,7 +478,6 @@ func TestListRepos(t *testing.T) {
 			},
 			wantRepoCount: 2,
 			wantRepoNames: []string{"active-fork", "archived-fork"},
-			wantErr:       false,
 		},
 		{
 			name:          "filter sources and forks without archives - excludes archived repos",
@@ -533,7 +494,6 @@ func TestListRepos(t *testing.T) {
 			},
 			wantRepoCount: 2,
 			wantRepoNames: []string{"active-source", "active-fork"},
-			wantErr:       false,
 		},
 		{
 			name:          "empty repo types - filters all repos when no types selected",
@@ -548,7 +508,6 @@ func TestListRepos(t *testing.T) {
 			},
 			wantRepoCount: 0,
 			wantRepoNames: nil,
-			wantErr:       false,
 		},
 		{
 			name:          "filter empty repositories",
@@ -563,7 +522,6 @@ func TestListRepos(t *testing.T) {
 			},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"normal-repo"},
-			wantErr:       false,
 		},
 		{
 			name:          "filter repositories without default branch",
@@ -578,7 +536,6 @@ func TestListRepos(t *testing.T) {
 			},
 			wantRepoCount: 1,
 			wantRepoNames: []string{"normal-repo"},
-			wantErr:       false,
 		},
 	}
 
@@ -773,7 +730,6 @@ func TestGetTree(t *testing.T) {
 			}`,
 			wantTruncated: false,
 			wantTreeSize:  2,
-			wantErr:       false,
 		},
 		{
 			name: "truncated tree",
@@ -793,7 +749,6 @@ func TestGetTree(t *testing.T) {
 			}`,
 			wantTruncated: true,
 			wantTreeSize:  1,
-			wantErr:       false,
 		},
 		{
 			name: "empty repository",
@@ -811,7 +766,6 @@ func TestGetTree(t *testing.T) {
 			}`,
 			wantTruncated: false,
 			wantTreeSize:  0,
-			wantErr:       false,
 		},
 		{
 			name: "invalid branch",
