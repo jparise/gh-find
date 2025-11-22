@@ -154,11 +154,23 @@ gh find "main.go" cli/cli            # Matches main.go in any directory
 gh find -p "cmd/**/*.go" cli/cli     # Only .go files in cmd/
 ```
 
-Glob syntax: `*` (any chars), `**` (with `/`), `?` (single char), `[abc]` (char set), `{a,b}` (alternatives)
+#### Glob Syntax
+
+| Pattern  | Matches                                    | Example                                                 |
+|----------|--------------------------------------------|---------------------------------------------------------|
+| `*`      | Any sequence of characters (excluding `/`) | `*.go` matches `main.go`, `util.go`                     |
+| `**`     | Zero or more directories                   | `**/test/*.go` matches `test/foo.go`, `pkg/test/bar.go` |
+| `?`      | Any single character (excluding `/`)       | `file?.go` matches `file1.go`, `fileX.go`               |
+| `[abc]`  | Any character in the set                   | `[ft]ile.go` matches `file.go`, `tile.go`               |
+| `[a-z]`  | Any character in the range                 | `file[0-9].go` matches `file1.go`, `file9.go`           |
+| `[^abc]` | Any character NOT in the set               | `[^t]est.go` matches `best.go`, `rest.go`               |
+| `{a,b}`  | Alternatives (one must match)              | `*.{go,md}` matches `file.go`, `README.md`              |
+
+*Note:* `**` must appear as its own path component (surrounded by `/`). Use backslash to escape special characters.
 
 ### Options
 
-#### Pattern Matching
+#### File Filtering
 - `-i, --ignore-case` - Case-insensitive pattern matching
 - `-p, --full-path` - Match pattern against full path instead of basename
 - `-t, --type type` - Filter by file type (can be specified multiple times for OR matching)
@@ -168,19 +180,16 @@ Glob syntax: `*` (any chars), `**` (with `/`), `?` (single char), `[abc]` (char 
 - `-E, --exclude pattern` - Exclude files matching pattern (can be specified multiple times)
 - `--min-size size` - Minimum file size (e.g., `1M`, `500k`, `1GB`)
 - `--max-size size` - Maximum file size (e.g., `5M`, `1GB`)
-- `--changed-within duration` - Filter files changed within duration (e.g., `2weeks`, `1d`, `10h`, `2018-10-27`) [Alias: `--newer`]
-- `--changed-before duration` - Filter files changed before duration ago (e.g., `2weeks`, `1d`, `10h`, `2018-10-27`) [Alias: `--older`]
+- `--changed-within duration` - Filter files changed within duration or since date (e.g., `2weeks`, `1d`, `10h`, `2018-10-27`) [alias: `--newer`]
+- `--changed-before duration` - Filter files changed before duration ago or date (e.g., `2weeks`, `1d`, `10h`, `2018-10-27`) [alias: `--older`]
 
 #### Repository Filtering
 - `--repo-types type[,type...]` - Repository types to include when expanding owners (default: `sources`)
   - Valid types: `sources`, `forks`, `archives`, `mirrors`, `all`
   - Only affects owner expansion (e.g., `cli` → all repos). Explicitly specified repos (e.g., `cli/archived-fork`) are always included
-  - Examples: `--repo-types sources,forks,archives` or `--repo-types all`
 
 #### Performance
 - `-j, --jobs N` - Maximum concurrent API requests (default: 10, max: 100)
-  - Increase for faster searches: `-j 20`
-  - Decrease if hitting rate limits: `-j 5`
 
 #### Caching
 - `--no-cache` - Bypass cache, always fetch fresh data
@@ -192,41 +201,24 @@ Glob syntax: `*` (any chars), `**` (with `/`), `?` (single char), `[abc]` (char 
 - `--hyperlink mode` - Hyperlink output: `auto`, `always`, `never` (default: `auto`)
   - `auto` only enables hyperlinks when color is also enabled
 
-## Caching
+## Rate Limits
 
-API responses are cached automatically to improve performance and reduce rate limit usage.
+The GitHub API is rate limited:
+- [REST API](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api): 5,000 requests/hour (authenticated), 60/hour (unauthenticated)
+- [GraphQL API](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api): 5,000 points/hour (authenticated), 0 (unauthenticated, disabled)
 
-- **What**: All GET requests (repository lists, file trees)
-- **Where**: `~/.cache/gh/` (configurable with `--cache-dir`)
-- **TTL**: 24 hours (configurable with `--cache-ttl`)
+Each search uses:
+- 1 REST request per repository
+- 1 REST request for listing an owner's repos (if needed)
 
-```bash
-# Bypass cache for fresh results
-gh find --no-cache "*.go" cli/cli
+And when commit date filtering is enabled (`--changed-within`/`--changed-before`):
+- 1+ GraphQL requests per repository (for commit dates), batched at 100 files per request (e.g., 450 matching files = 5 GraphQL requests)
 
-# Custom cache location or TTL
-gh find --cache-dir /tmp/cache "*.go" cli
-gh find --cache-ttl 1h "*.go" cli
-```
-
-## Performance
-
-Control concurrency with `-j/--jobs` (default: 10):
-
-```bash
-gh find -j 20 "*.go" cli    # Faster (uses rate limit faster)
-gh find -j 5 "*.go" cli     # Slower (conserves rate limit)
-```
-
-GitHub API rate limits:
-- Authenticated: 5,000 requests/hour
-- Unauthenticated: 60 requests/hour
-
-Each search uses 1 request per repository (plus 1 for listing repos). Cached requests don't count against limits.
+Local cache hits don't count against any rate limits.
 
 ## Known Limitations
 
-[GitHub's Git Trees API](https://docs.github.com/en/rest/git/trees) truncates responses for repositories with >100,000 files or >7MB tree data. Results will be partial with a warning.
+[GitHub's Git Trees API](https://docs.github.com/en/rest/git/trees) truncates responses for repositories with >100,000 files or >7MB tree data. Partial results are returned with a warning.
 
 ## Troubleshooting
 

@@ -312,9 +312,9 @@ func init() {
 
 	// Time filtering
 	rootCmd.Flags().Var(&changedWithin, "changed-within",
-		"filter by files changed within duration or since date (e.g., 2weeks, 1d, 2024-01-01)")
+		"filter by files changed within duration or since date (e.g., 2weeks, 1d, 2024-01-01) [alias: --newer]")
 	rootCmd.Flags().Var(&changedBefore, "changed-before",
-		"filter by files changed before duration ago or date (e.g., 2weeks, 1d, 2024-01-01)")
+		"filter by files changed before duration ago or date (e.g., 2weeks, 1d, 2024-01-01) [alias: --older]")
 
 	// Aliases (hidden from --help)
 	rootCmd.Flags().Var(&changedWithin, "newer", "alias for --changed-within")
