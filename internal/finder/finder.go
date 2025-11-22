@@ -251,23 +251,13 @@ func filterByExcludes(entries []github.TreeEntry, excludes []string, fullPath, i
 	return filtered, nil
 }
 
-func (f *Finder) filterByDate(ctx context.Context, repo github.Repository, entries []github.TreeEntry, changedAfter, changedBefore *time.Time) ([]github.TreeEntry, error) {
+func filterByDate(commits []github.FileCommitInfo, entries []github.TreeEntry, changedAfter, changedBefore *time.Time) []github.TreeEntry {
 	if changedAfter == nil && changedBefore == nil {
-		return entries, nil
+		return entries
 	}
 
-	paths := make([]string, len(entries))
-	for i, entry := range entries {
-		paths[i] = entry.Path
-	}
-
-	commitDates, err := f.client.GetFileCommitDates(ctx, repo, paths)
-	if err != nil {
-		return nil, err
-	}
-
-	pathDates := make(map[string]time.Time, len(commitDates))
-	for _, info := range commitDates {
+	pathDates := make(map[string]time.Time, len(commits))
+	for _, info := range commits {
 		pathDates[info.Path] = info.CommittedDate
 	}
 
@@ -288,7 +278,7 @@ func (f *Finder) filterByDate(ctx context.Context, repo github.Repository, entri
 		filtered = append(filtered, entry)
 	}
 
-	return filtered, nil
+	return filtered
 }
 
 func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *Options) error {
@@ -316,9 +306,18 @@ func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *O
 		return err
 	}
 
-	entries, err = f.filterByDate(ctx, repo, entries, opts.ChangedAfter, opts.ChangedBefore)
-	if err != nil {
-		return err
+	if opts.ChangedAfter != nil || opts.ChangedBefore != nil {
+		paths := make([]string, len(entries))
+		for i, entry := range entries {
+			paths[i] = entry.Path
+		}
+
+		commits, err := f.client.GetFileCommitDates(ctx, repo, paths)
+		if err != nil {
+			return err
+		}
+
+		entries = filterByDate(commits, entries, opts.ChangedAfter, opts.ChangedBefore)
 	}
 
 	for _, entry := range entries {
