@@ -65,7 +65,7 @@ gh find "*.go" golang/go@abc123def
 gh find "*.go" cli/cli@main golang/go@release-branch.go1.21
 ```
 
-### Pattern Matching
+### File Matching
 
 ```bash
 # Case-insensitive search
@@ -127,10 +127,10 @@ gh find [<pattern>] <repository>... [flags]
 
 ### Arguments
 
-- `pattern` - Glob pattern (optional, defaults to `*` for single repo)
+- `pattern` - Glob pattern (optional, defaults to `*`)
 - `repository` - One or more repositories to search:
-  - `owner` - All repos for a user or organization
-  - `owner/repo` - Specific repository (uses default branch)
+  - `owner` - All repos for a user or organization (see `--repo-types`)
+  - `owner/repo` - Specific repository (default branch)
   - `owner/repo@ref` - Specific repository at branch, tag, or commit SHA
 
 ```bash
@@ -216,23 +216,13 @@ And when commit date filtering is enabled (`--changed-within`/`--changed-before`
 
 Local cache hits don't count against any rate limits.
 
-## Known Limitations
+## Common Issues
 
-[GitHub's Git Trees API](https://docs.github.com/en/rest/git/trees) truncates responses for repositories with >100,000 files or >7MB tree data. Partial results are returned with a warning.
+**API truncation** - [GitHub's Git Trees API](https://docs.github.com/en/rest/git/trees) truncates responses for repositories with >100,000 files or >7MB tree data. Partial results are returned with a warning.
 
-## Troubleshooting
+**No repositories found?** - Default `--repo-types sources` excludes forks/archives. Try `--repo-types all`.
 
-**"No repositories match the filter"** - Check `--repo-types`. Default excludes forks, archives, mirrors. Try `--repo-types all`.
-
-**"Pattern matching not working"** - Patterns match basename by default. Use `-p` for full path matching:
-```bash
-gh find -p "cmd/*.go" cli/cli   # Full path
-gh find "*.go" cli/cli          # Basename
-```
-
-**"Rate limit exceeded"** - Wait for reset, use cache (enabled by default), or reduce concurrency with `-j 5`.
-
-**"Failed to get owner type"** - Username/org doesn't exist or no access. Verify with `gh api users/username`.
+**Pattern not matching subdirectories?** - Patterns match basename by default. Use `-p` for full paths.
 
 ## License
 
