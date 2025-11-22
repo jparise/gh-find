@@ -199,7 +199,6 @@ gh find -p "cmd/**/*.go" cli/cli     # Only .go files in cmd/
 #### Output
 - `-c, --color mode` - Colorize output: `auto`, `always`, `never` (default: `auto`)
 - `--hyperlink mode` - Hyperlink output: `auto`, `always`, `never` (default: `auto`)
-  - `auto` only enables hyperlinks when color is also enabled
 
 ## Rate Limits
 
