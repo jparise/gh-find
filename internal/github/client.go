@@ -29,9 +29,10 @@ type ClientOptions struct {
 	DisableCache bool
 }
 
-// Client wraps the go-gh REST client.
+// Client wraps the go-gh REST and GraphQL clients.
 type Client struct {
-	rest *api.RESTClient
+	rest    *api.RESTClient
+	graphql *api.GraphQLClient
 }
 
 // NewClient creates a new GitHub API client with the given options.
@@ -48,8 +49,14 @@ func NewClient(opts ClientOptions) (*Client, error) {
 		return nil, fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
+	graphql, err := api.NewGraphQLClient(apiOpts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub GraphQL client: %w", err)
+	}
+
 	return &Client{
-		rest: rest,
+		rest:    rest,
+		graphql: graphql,
 	}, nil
 }
 

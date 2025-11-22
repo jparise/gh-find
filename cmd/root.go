@@ -15,6 +15,7 @@ import (
 	"github.com/cli/go-gh/v2/pkg/term"
 	"github.com/jparise/gh-find/internal/finder"
 	"github.com/jparise/gh-find/internal/github"
+	"github.com/jparise/gh-find/internal/timeparse"
 	"github.com/spf13/cobra"
 )
 
@@ -198,23 +199,54 @@ func (b *byteSize) Type() string {
 	return "size"
 }
 
+type timeDuration time.Duration
+
+func (t *timeDuration) Set(s string) error {
+	// Try parsing as duration first (2weeks, 1d, 10h)
+	if duration, err := timeparse.ParseDuration(s); err == nil {
+		*t = timeDuration(duration)
+		return nil
+	}
+
+	// Try parsing as absolute time (2018-10-27, 2018-10-27 10:00:00)
+	if tm, err := timeparse.ParseTime(s); err == nil {
+		*t = timeDuration(time.Since(tm))
+		return nil
+	}
+
+	return fmt.Errorf("invalid time format (expected duration like '2weeks' or date like '2018-10-27')")
+}
+
+func (t *timeDuration) String() string {
+	if *t == 0 {
+		return ""
+	}
+	return time.Duration(*t).String()
+}
+
+func (t *timeDuration) Type() string {
+	return "duration"
+}
+
 var (
 	version = "dev"
 
-	color      = outputAuto
-	hyperlink  = outputAuto
-	repoTypes  = repoTypesFlag{Sources: true}
-	fileTypes  fileTypesFlag
-	ignoreCase bool
-	fullPath   bool
-	extensions extensionsFlag
-	excludes   []string
-	minSize    byteSize
-	maxSize    byteSize
-	noCache    bool
-	cacheDir   string
-	cacheTTL   time.Duration
-	jobs       = jobsCount(10)
+	color         = outputAuto
+	hyperlink     = outputAuto
+	repoTypes     = repoTypesFlag{Sources: true}
+	fileTypes     fileTypesFlag
+	ignoreCase    bool
+	fullPath      bool
+	extensions    extensionsFlag
+	excludes      []string
+	minSize       byteSize
+	maxSize       byteSize
+	changedWithin timeDuration
+	changedBefore timeDuration
+	noCache       bool
+	cacheDir      string
+	cacheTTL      time.Duration
+	jobs          = jobsCount(10)
 )
 
 var rootCmd = &cobra.Command{
@@ -248,6 +280,8 @@ Examples:
   gh find "*" cli/cli cli/go-gh
   gh find -e go -e md cli
   gh find --min-size 50k "*.go" golang/go
+  gh find --changed-within 2weeks "*.go" cli/cli
+  gh find --newer 1d --min-size 10k golang/go
   gh find "*.js" -E "*.test.js" -E "*.spec.js" facebook/react
   gh find --min-size 10k --max-size 100k "*.go" cli/cli`,
 	Version: version,
@@ -275,6 +309,18 @@ func init() {
 		"minimum file size (e.g., 1M, 500k, 1GB)")
 	rootCmd.Flags().Var(&maxSize, "max-size",
 		"maximum file size (e.g., 5M, 1GB)")
+
+	// Time filtering
+	rootCmd.Flags().Var(&changedWithin, "changed-within",
+		"filter by files changed within duration or since date (e.g., 2weeks, 1d, 2024-01-01)")
+	rootCmd.Flags().Var(&changedBefore, "changed-before",
+		"filter by files changed before duration ago or date (e.g., 2weeks, 1d, 2024-01-01)")
+
+	// Aliases (hidden from --help)
+	rootCmd.Flags().Var(&changedWithin, "newer", "alias for --changed-within")
+	rootCmd.Flags().Var(&changedBefore, "older", "alias for --changed-before")
+	_ = rootCmd.Flags().MarkHidden("newer")
+	_ = rootCmd.Flags().MarkHidden("older")
 
 	// Repository selection
 	rootCmd.Flags().Var(&repoTypes, "repo-types",
@@ -440,18 +486,32 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--min-size cannot be greater than --max-size")
 	}
 
+	// Convert timeDuration to *time.Time
+	now := time.Now()
+	var changedAfterTime, changedBeforeTime *time.Time
+	if changedWithin != 0 {
+		t := now.Add(-time.Duration(changedWithin))
+		changedAfterTime = &t
+	}
+	if changedBefore != 0 {
+		t := now.Add(-time.Duration(changedBefore))
+		changedBeforeTime = &t
+	}
+
 	// Build search options
 	opts := &finder.Options{
-		Pattern:    pattern,
-		RepoSpecs:  repoSpecs,
-		RepoTypes:  github.RepoTypes(repoTypes),
-		FileTypes:  []github.FileType(fileTypes),
-		IgnoreCase: ignoreCase,
-		FullPath:   fullPath,
-		Extensions: []string(extensions),
-		Excludes:   excludes,
-		MinSize:    int64(minSize),
-		MaxSize:    int64(maxSize),
+		Pattern:       pattern,
+		RepoSpecs:     repoSpecs,
+		RepoTypes:     github.RepoTypes(repoTypes),
+		FileTypes:     []github.FileType(fileTypes),
+		IgnoreCase:    ignoreCase,
+		FullPath:      fullPath,
+		Extensions:    []string(extensions),
+		Excludes:      excludes,
+		MinSize:       int64(minSize),
+		MaxSize:       int64(maxSize),
+		ChangedAfter:  changedAfterTime,
+		ChangedBefore: changedBeforeTime,
 		ClientOpts: github.ClientOptions{
 			DisableCache: noCache,
 			CacheDir:     cacheDir,

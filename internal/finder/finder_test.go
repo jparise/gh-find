@@ -1,8 +1,11 @@
 package finder
 
 import (
+	"context"
+	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/jparise/gh-find/internal/github"
 )
@@ -470,5 +473,254 @@ func TestFilterByExtension(t *testing.T) {
 				t.Errorf("got %v, want %v", treePaths(got), tt.wantPaths)
 			}
 		})
+	}
+}
+
+// clientWithCommitDates is an interface for the minimal client methods needed by filterByDate.
+type clientWithCommitDates interface {
+	GetFileCommitDates(ctx context.Context, repo github.Repository, paths []string) ([]github.FileCommitInfo, error)
+}
+
+// mockClient is a minimal mock of github.Client for testing filterByDate.
+type mockClient struct {
+	commitDates []github.FileCommitInfo
+	err         error
+}
+
+func (m *mockClient) GetFileCommitDates(ctx context.Context, repo github.Repository, paths []string) ([]github.FileCommitInfo, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.commitDates, nil
+}
+
+// finderWithMockClient wraps a Finder with a mock client for testing.
+type finderWithMockClient struct {
+	client clientWithCommitDates
+}
+
+func (f *finderWithMockClient) filterByDate(ctx context.Context, repo github.Repository, entries []github.TreeEntry, changedAfter, changedBefore *time.Time) ([]github.TreeEntry, error) {
+	if changedAfter == nil && changedBefore == nil {
+		return entries, nil
+	}
+
+	paths := make([]string, len(entries))
+	for i, entry := range entries {
+		paths[i] = entry.Path
+	}
+
+	commitDates, err := f.client.GetFileCommitDates(ctx, repo, paths)
+	if err != nil {
+		return nil, err
+	}
+
+	pathDates := make(map[string]time.Time, len(commitDates))
+	for _, info := range commitDates {
+		pathDates[info.Path] = info.CommittedDate
+	}
+
+	filtered := make([]github.TreeEntry, 0, len(entries))
+	for _, entry := range entries {
+		commitDate, ok := pathDates[entry.Path]
+		if !ok {
+			continue
+		}
+
+		if changedAfter != nil && commitDate.Before(*changedAfter) {
+			continue
+		}
+		if changedBefore != nil && commitDate.After(*changedBefore) {
+			continue
+		}
+
+		filtered = append(filtered, entry)
+	}
+
+	return filtered, nil
+}
+
+func TestFilterByDate(t *testing.T) {
+	// Reference times for testing
+	now := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	oneWeekAgo := now.Add(-7 * 24 * time.Hour)
+	twoWeeksAgo := now.Add(-14 * 24 * time.Hour)
+	threeWeeksAgo := now.Add(-21 * 24 * time.Hour)
+
+	entries := []github.TreeEntry{
+		{Path: "recent.go"},
+		{Path: "week.go"},
+		{Path: "twoweeks.go"},
+		{Path: "old.go"},
+		{Path: "nodate.go"}, // This file won't have commit data
+	}
+
+	repo := github.Repository{
+		Owner:    "test",
+		Name:     "repo",
+		FullName: "test/repo",
+	}
+
+	tests := []struct {
+		name          string
+		commitDates   []github.FileCommitInfo
+		changedAfter  *time.Time
+		changedBefore *time.Time
+		wantPaths     []string
+	}{
+		{
+			name: "no date filters - returns all",
+			commitDates: []github.FileCommitInfo{
+				{Path: "recent.go", CommittedDate: now},
+				{Path: "week.go", CommittedDate: oneWeekAgo},
+				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
+				{Path: "old.go", CommittedDate: threeWeeksAgo},
+			},
+			changedAfter:  nil,
+			changedBefore: nil,
+			wantPaths:     []string{"recent.go", "week.go", "twoweeks.go", "old.go", "nodate.go"},
+		},
+		{
+			name: "changed after filter - files newer than cutoff",
+			commitDates: []github.FileCommitInfo{
+				{Path: "recent.go", CommittedDate: now},
+				{Path: "week.go", CommittedDate: oneWeekAgo},
+				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
+				{Path: "old.go", CommittedDate: threeWeeksAgo},
+			},
+			changedAfter:  &oneWeekAgo,
+			changedBefore: nil,
+			wantPaths:     []string{"recent.go", "week.go"},
+		},
+		{
+			name: "changed before filter - files older than cutoff",
+			commitDates: []github.FileCommitInfo{
+				{Path: "recent.go", CommittedDate: now},
+				{Path: "week.go", CommittedDate: oneWeekAgo},
+				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
+				{Path: "old.go", CommittedDate: threeWeeksAgo},
+			},
+			changedAfter:  nil,
+			changedBefore: &twoWeeksAgo,
+			wantPaths:     []string{"twoweeks.go", "old.go"},
+		},
+		{
+			name: "both filters - date range",
+			commitDates: []github.FileCommitInfo{
+				{Path: "recent.go", CommittedDate: now},
+				{Path: "week.go", CommittedDate: oneWeekAgo},
+				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
+				{Path: "old.go", CommittedDate: threeWeeksAgo},
+			},
+			changedAfter:  &threeWeeksAgo,
+			changedBefore: &oneWeekAgo,
+			wantPaths:     []string{"week.go", "twoweeks.go", "old.go"},
+		},
+		{
+			name: "boundary - exact match on changedAfter",
+			commitDates: []github.FileCommitInfo{
+				{Path: "recent.go", CommittedDate: now},
+				{Path: "week.go", CommittedDate: oneWeekAgo},
+				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
+			},
+			changedAfter:  &oneWeekAgo,
+			changedBefore: nil,
+			wantPaths:     []string{"recent.go", "week.go"},
+		},
+		{
+			name: "boundary - exact match on changedBefore",
+			commitDates: []github.FileCommitInfo{
+				{Path: "recent.go", CommittedDate: now},
+				{Path: "week.go", CommittedDate: oneWeekAgo},
+				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
+			},
+			changedAfter:  nil,
+			changedBefore: &oneWeekAgo,
+			wantPaths:     []string{"week.go", "twoweeks.go"},
+		},
+		{
+			name: "no matches - all files too old",
+			commitDates: []github.FileCommitInfo{
+				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
+				{Path: "old.go", CommittedDate: threeWeeksAgo},
+			},
+			changedAfter:  &now,
+			changedBefore: nil,
+			wantPaths:     []string{},
+		},
+		{
+			name: "no matches - all files too new",
+			commitDates: []github.FileCommitInfo{
+				{Path: "recent.go", CommittedDate: now},
+				{Path: "week.go", CommittedDate: oneWeekAgo},
+			},
+			changedAfter:  nil,
+			changedBefore: &threeWeeksAgo,
+			wantPaths:     []string{},
+		},
+		{
+			name: "missing commit data - file excluded",
+			commitDates: []github.FileCommitInfo{
+				{Path: "recent.go", CommittedDate: now},
+				{Path: "week.go", CommittedDate: oneWeekAgo},
+				// nodate.go intentionally missing
+			},
+			changedAfter:  &twoWeeksAgo,
+			changedBefore: nil,
+			wantPaths:     []string{"recent.go", "week.go"},
+		},
+		{
+			name:          "empty commit data",
+			commitDates:   []github.FileCommitInfo{},
+			changedAfter:  &oneWeekAgo,
+			changedBefore: nil,
+			wantPaths:     []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &finderWithMockClient{
+				client: &mockClient{
+					commitDates: tt.commitDates,
+				},
+			}
+
+			got, err := f.filterByDate(context.Background(), repo, entries, tt.changedAfter, tt.changedBefore)
+			if err != nil {
+				t.Fatalf("filterByDate() error = %v", err)
+			}
+
+			if !slices.Equal(treePaths(got), tt.wantPaths) {
+				t.Errorf("got %v, want %v", treePaths(got), tt.wantPaths)
+			}
+		})
+	}
+}
+
+func TestFilterByDate_Error(t *testing.T) {
+	entries := []github.TreeEntry{
+		{Path: "file.go"},
+	}
+
+	repo := github.Repository{
+		Owner:    "test",
+		Name:     "repo",
+		FullName: "test/repo",
+	}
+
+	now := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+
+	f := &finderWithMockClient{
+		client: &mockClient{
+			err: context.DeadlineExceeded,
+		},
+	}
+
+	_, err := f.filterByDate(context.Background(), repo, entries, &now, nil)
+	if err == nil {
+		t.Fatal("filterByDate() expected error, got nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("filterByDate() error = %v, want %v", err, context.DeadlineExceeded)
 	}
 }

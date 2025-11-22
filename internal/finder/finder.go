@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/jparise/gh-find/internal/github"
@@ -250,6 +251,46 @@ func filterByExcludes(entries []github.TreeEntry, excludes []string, fullPath, i
 	return filtered, nil
 }
 
+func (f *Finder) filterByDate(ctx context.Context, repo github.Repository, entries []github.TreeEntry, changedAfter, changedBefore *time.Time) ([]github.TreeEntry, error) {
+	if changedAfter == nil && changedBefore == nil {
+		return entries, nil
+	}
+
+	paths := make([]string, len(entries))
+	for i, entry := range entries {
+		paths[i] = entry.Path
+	}
+
+	commitDates, err := f.client.GetFileCommitDates(ctx, repo, paths)
+	if err != nil {
+		return nil, err
+	}
+
+	pathDates := make(map[string]time.Time, len(commitDates))
+	for _, info := range commitDates {
+		pathDates[info.Path] = info.CommittedDate
+	}
+
+	filtered := make([]github.TreeEntry, 0, len(entries))
+	for _, entry := range entries {
+		commitDate, ok := pathDates[entry.Path]
+		if !ok {
+			continue // No matching path, skip
+		}
+
+		if changedAfter != nil && commitDate.Before(*changedAfter) {
+			continue
+		}
+		if changedBefore != nil && commitDate.After(*changedBefore) {
+			continue
+		}
+
+		filtered = append(filtered, entry)
+	}
+
+	return filtered, nil
+}
+
 func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *Options) error {
 	tree, err := f.client.GetTree(ctx, repo)
 	if err != nil {
@@ -271,6 +312,11 @@ func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *O
 	}
 
 	entries, err = filterByExcludes(entries, opts.Excludes, opts.FullPath, opts.IgnoreCase)
+	if err != nil {
+		return err
+	}
+
+	entries, err = f.filterByDate(ctx, repo, entries, opts.ChangedAfter, opts.ChangedBefore)
 	if err != nil {
 		return err
 	}

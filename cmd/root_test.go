@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/jparise/gh-find/internal/finder"
 	"github.com/jparise/gh-find/internal/github"
@@ -472,6 +474,84 @@ func TestParseArgs(t *testing.T) {
 			if !reflect.DeepEqual(repos, tt.wantRepos) {
 				t.Errorf("parseArgs(%v) repos = %+v, want %+v", tt.args, repos, tt.wantRepos)
 			}
+		})
+	}
+}
+
+func TestTimeDuration(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		want    time.Duration
+		wantErr bool
+	}{
+		// Duration formats
+		{
+			name:  "hours",
+			value: "10h",
+			want:  10 * time.Hour,
+		},
+		{
+			name:  "days",
+			value: "2d",
+			want:  48 * time.Hour,
+		},
+		{
+			name:  "weeks",
+			value: "2weeks",
+			want:  14 * 24 * time.Hour,
+		},
+
+		// Absolute date (converted to duration)
+		// synctest fake clock is at 2000-01-01 00:00:00 UTC
+		{
+			name:  "absolute date",
+			value: "1999-12-25T00:00:00Z",
+			want:  7 * 24 * time.Hour,
+		},
+
+		// Error cases
+		{
+			name:    "invalid duration",
+			value:   "invalid",
+			wantErr: true,
+		},
+		{
+			name:    "invalid date",
+			value:   "2024-13-45",
+			wantErr: true,
+		},
+		{
+			name:    "empty string",
+			value:   "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				t.Helper()
+				var d timeDuration
+				err := d.Set(tt.value)
+
+				if tt.wantErr {
+					if err == nil {
+						t.Errorf("timeDuration.Set(%q) expected error, got nil", tt.value)
+					}
+					return
+				}
+
+				if err != nil {
+					t.Errorf("timeDuration.Set(%q) unexpected error: %v", tt.value, err)
+					return
+				}
+
+				got := time.Duration(d)
+				if got != tt.want {
+					t.Errorf("got %v, want %v", got, tt.want)
+				}
+			})
 		})
 	}
 }
