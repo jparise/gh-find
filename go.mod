@@ -3,7 +3,7 @@ module github.com/jparise/gh-find
 go 1.25.3
 
 require (
-	github.com/bmatcuk/doublestar/v4 v4.9.1
+	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/cli/go-gh/v2 v2.13.0
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d
 	github.com/spf13/cobra v1.10.1
