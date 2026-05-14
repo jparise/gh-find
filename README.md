@@ -2,7 +2,9 @@
 
 > A `find(1)`-like utility for GitHub repositories
 
-`gh-find` searches for files across GitHub repositories from the command line. It offers [intuitive pattern matching](#pattern-matching), [many filtering options](#options), and sensible, performance-minded defaults.
+`gh-find` searches for files across GitHub repositories from the command line. It offers [intuitive pattern matching](#pattern-matching), [many filtering options](#options), and sensible, performance-minded defaults. It works well in shell pipelines, CI checks, and [agent workflows](#using-with-ai-agents) that need to locate code across repos without cloning them.
+
+![demo](demo.gif)
 
 ## Installation
 
@@ -189,6 +191,16 @@ gh find "*.go" cli/cli | sort -r
 
 # Sort by repo name, then path
 gh find "*.go" cli golang/go | sort -t: -k1,1 -k2
+```
+
+## Using with AI Agents
+
+`gh-find` fits naturally into agent workflows (Claude Code, Cursor, and similar tools) that need to locate code across repositories without cloning them. Filters like `--type`, `--extension`, and `--exclude` keep results small and on-topic, which preserves the agent's context window, and its `repo:path` output pipes cleanly into `xargs` or `gh api` for follow-up work. Local caching (see `--cache-ttl`) makes iterative runs cheap.
+
+For example, an agent asked to audit GitHub Actions workflows across an org can narrow the search before reading any files:
+
+```bash
+gh find -p ".github/workflows/*.yml" myorg
 ```
 
 ## Rate Limits
