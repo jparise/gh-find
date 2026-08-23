@@ -13,20 +13,10 @@ import (
 //
 // Returns the parsed time or an error if the format is invalid.
 func ParseTime(s string) (time.Time, error) {
-	// Try parsing as date only (YYYY-MM-DD) - assume UTC
-	if t, err := time.Parse(time.DateOnly, s); err == nil {
-		return t, nil
+	for _, layout := range []string{time.DateOnly, time.DateTime, time.RFC3339} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, nil
+		}
 	}
-
-	// Try parsing as date and time (YYYY-MM-DD HH:MM:SS) - assume UTC
-	if t, err := time.Parse(time.DateTime, s); err == nil {
-		return t, nil
-	}
-
-	// Try parsing as RFC3339 (can specify timezone explicitly)
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t, nil
-	}
-
 	return time.Time{}, fmt.Errorf("invalid time format %q (expected YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, or RFC3339)", s)
 }
