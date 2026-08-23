@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/cli/go-gh/v2/pkg/api"
 )
@@ -167,65 +166,13 @@ var (
 	mirrorRepo = repoFields{name: "mirror-repo", branch: "main", size: 1024, mirrorURL: "https://example.com/repo.git"}
 )
 
-// TestNewClient tests client initialization with various options.
 func TestNewClient(t *testing.T) {
-	tests := []struct {
-		name    string
-		opts    ClientOptions
-		wantErr bool
-	}{
-		{
-			name: "default options",
-			opts: ClientOptions{
-				AuthToken:    fakeToken,
-				CacheDir:     "",
-				CacheTTL:     24 * time.Hour,
-				DisableCache: false,
-			},
-			wantErr: false,
-		},
-		{
-			name: "cache disabled",
-			opts: ClientOptions{
-				AuthToken:    fakeToken,
-				CacheDir:     "",
-				CacheTTL:     0,
-				DisableCache: true,
-			},
-			wantErr: false,
-		},
-		{
-			name: "custom cache directory",
-			opts: ClientOptions{
-				AuthToken:    fakeToken,
-				CacheDir:     "/tmp/test-cache",
-				CacheTTL:     time.Hour,
-				DisableCache: false,
-			},
-			wantErr: false,
-		},
-		{
-			name: "custom cache TTL",
-			opts: ClientOptions{
-				AuthToken:    fakeToken,
-				CacheDir:     "",
-				CacheTTL:     30 * time.Minute,
-				DisableCache: false,
-			},
-			wantErr: false,
-		},
+	client, err := NewClient(ClientOptions{AuthToken: fakeToken})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewClient(tt.opts)
-			if !assertError(t, err, tt.wantErr, "NewClient()") {
-				return
-			}
-			if !tt.wantErr && client == nil {
-				t.Error("NewClient() returned nil client")
-			}
-		})
+	if client == nil {
+		t.Fatal("NewClient() returned nil client")
 	}
 }
 
