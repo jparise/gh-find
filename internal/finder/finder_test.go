@@ -17,138 +17,61 @@ func treePaths(entries []github.TreeEntry) []string {
 }
 
 func TestFilterByType(t *testing.T) {
+	entries := []github.TreeEntry{
+		{Path: "regular", Mode: "100644"},
+		{Path: "group-writable", Mode: "100664"},
+		{Path: "directory-1", Mode: "040000"},
+		{Path: "directory-2", Mode: "040000"},
+		{Path: "executable-1", Mode: "100755"},
+		{Path: "executable-2", Mode: "100755"},
+		{Path: "symlink-1", Mode: "120000"},
+		{Path: "symlink-2", Mode: "120000"},
+		{Path: "submodule-1", Mode: "160000"},
+		{Path: "submodule-2", Mode: "160000"},
+	}
+
 	tests := []struct {
 		name      string
 		entries   []github.TreeEntry
 		types     []github.FileType
 		wantPaths []string
 	}{
-		{
-			name: "filter files only",
-			entries: []github.TreeEntry{
-				{Path: "main.go", Mode: "100644"},
-				{Path: "src", Mode: "040000"},
-				{Path: "build.sh", Mode: "100755"},
-				{Path: "link", Mode: "120000"},
-			},
-			types:     []github.FileType{github.FileTypeFile},
-			wantPaths: []string{"main.go"},
-		},
-		{
-			name: "filter directories only",
-			entries: []github.TreeEntry{
-				{Path: "main.go", Mode: "100644"},
-				{Path: "src", Mode: "040000"},
-				{Path: "pkg", Mode: "040000"},
-				{Path: "build.sh", Mode: "100755"},
-			},
-			types:     []github.FileType{github.FileTypeDirectory},
-			wantPaths: []string{"src", "pkg"},
-		},
-		{
-			name: "filter executables only",
-			entries: []github.TreeEntry{
-				{Path: "main.go", Mode: "100644"},
-				{Path: "build.sh", Mode: "100755"},
-				{Path: "deploy.sh", Mode: "100755"},
-				{Path: "src", Mode: "040000"},
-			},
-			types:     []github.FileType{github.FileTypeExecutable},
-			wantPaths: []string{"build.sh", "deploy.sh"},
-		},
-		{
-			name: "filter symlinks only",
-			entries: []github.TreeEntry{
-				{Path: "main.go", Mode: "100644"},
-				{Path: "link1", Mode: "120000"},
-				{Path: "link2", Mode: "120000"},
-				{Path: "src", Mode: "040000"},
-			},
-			types:     []github.FileType{github.FileTypeSymlink},
-			wantPaths: []string{"link1", "link2"},
-		},
-		{
-			name: "filter submodules only",
-			entries: []github.TreeEntry{
-				{Path: "main.go", Mode: "100644"},
-				{Path: "vendor/lib", Mode: "160000"},
-				{Path: "vendor/dep", Mode: "160000"},
-				{Path: "src", Mode: "040000"},
-			},
-			types:     []github.FileType{github.FileTypeSubmodule},
-			wantPaths: []string{"vendor/lib", "vendor/dep"},
-		},
-		{
-			name: "multiple types - OR logic",
-			entries: []github.TreeEntry{
-				{Path: "main.go", Mode: "100644"},
-				{Path: "src", Mode: "040000"},
-				{Path: "build.sh", Mode: "100755"},
-				{Path: "link", Mode: "120000"},
-				{Path: "vendor/lib", Mode: "160000"},
-			},
-			types:     []github.FileType{github.FileTypeFile, github.FileTypeDirectory},
-			wantPaths: []string{"main.go", "src"},
-		},
-		{
-			name: "multiple types including executables",
-			entries: []github.TreeEntry{
-				{Path: "main.go", Mode: "100644"},
-				{Path: "src", Mode: "040000"},
-				{Path: "build.sh", Mode: "100755"},
-				{Path: "link", Mode: "120000"},
-			},
-			types:     []github.FileType{github.FileTypeExecutable, github.FileTypeSymlink},
-			wantPaths: []string{"build.sh", "link"},
-		},
-		{
-			name: "no type filter - returns all",
-			entries: []github.TreeEntry{
-				{Path: "main.go", Mode: "100644"},
-				{Path: "src", Mode: "040000"},
-				{Path: "build.sh", Mode: "100755"},
-			},
-			types:     []github.FileType{},
-			wantPaths: []string{"main.go", "src", "build.sh"},
-		},
-		{
-			name: "no matches",
-			entries: []github.TreeEntry{
-				{Path: "main.go", Mode: "100644"},
-				{Path: "data.txt", Mode: "100644"},
-			},
-			types:     []github.FileType{github.FileTypeDirectory},
-			wantPaths: []string{},
-		},
-		{
-			name:      "empty input slice",
-			entries:   []github.TreeEntry{},
-			types:     []github.FileType{github.FileTypeFile},
-			wantPaths: []string{},
-		},
-		{
-			name: "group-writable file matches file type",
-			entries: []github.TreeEntry{
-				{Path: "data.txt", Mode: "100664"},
-				{Path: "src", Mode: "040000"},
-			},
-			types:     []github.FileType{github.FileTypeFile},
-			wantPaths: []string{"data.txt"},
-		},
+		{name: "files", types: []github.FileType{github.FileTypeFile}, wantPaths: treePaths(entries[:2])},
+		{name: "directories", types: []github.FileType{github.FileTypeDirectory}, wantPaths: treePaths(entries[2:4])},
+		{name: "executables", types: []github.FileType{github.FileTypeExecutable}, wantPaths: treePaths(entries[4:6])},
+		{name: "symlinks", types: []github.FileType{github.FileTypeSymlink}, wantPaths: treePaths(entries[6:8])},
+		{name: "submodules", types: []github.FileType{github.FileTypeSubmodule}, wantPaths: treePaths(entries[8:])},
+		{name: "files or directories", types: []github.FileType{github.FileTypeFile, github.FileTypeDirectory}, wantPaths: treePaths(entries[:4])},
+		{name: "executables or symlinks", types: []github.FileType{github.FileTypeExecutable, github.FileTypeSymlink}, wantPaths: treePaths(entries[4:8])},
+		{name: "no filter", wantPaths: treePaths(entries)},
+		{name: "no matches", entries: entries[:2], types: []github.FileType{github.FileTypeDirectory}},
+		{name: "empty input", entries: []github.TreeEntry{}, types: []github.FileType{github.FileTypeFile}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := filterByType(tt.entries, tt.types)
-
-			if !slices.Equal(treePaths(got), tt.wantPaths) {
-				t.Errorf("got %v, want %v", treePaths(got), tt.wantPaths)
+			input := tt.entries
+			if input == nil {
+				input = entries
+			}
+			got := treePaths(filterByType(input, tt.types))
+			if !slices.Equal(got, tt.wantPaths) {
+				t.Errorf("got %v, want %v", got, tt.wantPaths)
 			}
 		})
 	}
 }
 
 func TestFilterBySize(t *testing.T) {
+	entries := []github.TreeEntry{
+		{Path: "size-0", Size: 0},
+		{Path: "size-100", Size: 100},
+		{Path: "size-500", Size: 500},
+		{Path: "size-750", Size: 750},
+		{Path: "size-1000", Size: 1000},
+		{Path: "size-2000", Size: 2000},
+	}
+
 	tests := []struct {
 		name      string
 		entries   []github.TreeEntry
@@ -156,117 +79,24 @@ func TestFilterBySize(t *testing.T) {
 		maxSize   int64
 		wantPaths []string
 	}{
-		{
-			name: "min size only - filters smaller files",
-			entries: []github.TreeEntry{
-				{Path: "small.txt", Size: 512},
-				{Path: "exact.txt", Size: 1024},
-				{Path: "large.txt", Size: 2048},
-			},
-			minSize:   1024,
-			maxSize:   0,
-			wantPaths: []string{"exact.txt", "large.txt"},
-		},
-		{
-			name: "max size only - filters larger files",
-			entries: []github.TreeEntry{
-				{Path: "small.txt", Size: 512},
-				{Path: "exact.txt", Size: 1024},
-				{Path: "large.txt", Size: 2048},
-			},
-			minSize:   0,
-			maxSize:   1024,
-			wantPaths: []string{"small.txt", "exact.txt"},
-		},
-		{
-			name: "both min and max - range filter",
-			entries: []github.TreeEntry{
-				{Path: "tiny.txt", Size: 100},
-				{Path: "min.txt", Size: 500},
-				{Path: "mid.txt", Size: 750},
-				{Path: "max.txt", Size: 1000},
-				{Path: "huge.txt", Size: 2000},
-			},
-			minSize:   500,
-			maxSize:   1000,
-			wantPaths: []string{"min.txt", "mid.txt", "max.txt"},
-		},
-		{
-			name: "no filter - returns all",
-			entries: []github.TreeEntry{
-				{Path: "a.txt", Size: 100},
-				{Path: "b.txt", Size: 200},
-			},
-			minSize:   0,
-			maxSize:   0,
-			wantPaths: []string{"a.txt", "b.txt"},
-		},
-		{
-			name: "zero-size file with min filter - excluded",
-			entries: []github.TreeEntry{
-				{Path: "empty.txt", Size: 0},
-				{Path: "small.txt", Size: 100},
-			},
-			minSize:   1,
-			maxSize:   0,
-			wantPaths: []string{"small.txt"},
-		},
-		{
-			name: "zero-size file with max filter - included",
-			entries: []github.TreeEntry{
-				{Path: "empty.txt", Size: 0},
-				{Path: "small.txt", Size: 100},
-			},
-			minSize:   0,
-			maxSize:   100,
-			wantPaths: []string{"empty.txt", "small.txt"},
-		},
-		{
-			name: "boundary: size equals min",
-			entries: []github.TreeEntry{
-				{Path: "below.txt", Size: 999},
-				{Path: "exact.txt", Size: 1000},
-				{Path: "above.txt", Size: 1001},
-			},
-			minSize:   1000,
-			maxSize:   0,
-			wantPaths: []string{"exact.txt", "above.txt"},
-		},
-		{
-			name: "boundary: size equals max",
-			entries: []github.TreeEntry{
-				{Path: "below.txt", Size: 999},
-				{Path: "exact.txt", Size: 1000},
-				{Path: "above.txt", Size: 1001},
-			},
-			minSize:   0,
-			maxSize:   1000,
-			wantPaths: []string{"below.txt", "exact.txt"},
-		},
-		{
-			name: "impossible range - min > max returns nothing",
-			entries: []github.TreeEntry{
-				{Path: "file.txt", Size: 500},
-			},
-			minSize:   1000,
-			maxSize:   100,
-			wantPaths: []string{},
-		},
-		{
-			name:      "empty input slice",
-			entries:   []github.TreeEntry{},
-			minSize:   100,
-			maxSize:   1000,
-			wantPaths: []string{},
-		},
+		{name: "minimum", minSize: 500, wantPaths: treePaths(entries[2:])},
+		{name: "maximum", maxSize: 1000, wantPaths: treePaths(entries[:5])},
+		{name: "range", minSize: 500, maxSize: 1000, wantPaths: treePaths(entries[2:5])},
+		{name: "no filter", wantPaths: treePaths(entries)},
+		{name: "minimum excludes zero", minSize: 1, wantPaths: treePaths(entries[1:])},
+		{name: "impossible range", minSize: 1000, maxSize: 100},
+		{name: "empty input", entries: []github.TreeEntry{}, minSize: 100, maxSize: 1000},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := filterBySize(tt.entries, tt.minSize, tt.maxSize)
-
-			if !slices.Equal(treePaths(got), tt.wantPaths) {
-				t.Errorf("got %v, want %v", treePaths(got), tt.wantPaths)
+			input := tt.entries
+			if input == nil {
+				input = entries
+			}
+			got := treePaths(filterBySize(input, tt.minSize, tt.maxSize))
+			if !slices.Equal(got, tt.wantPaths) {
+				t.Errorf("got %v, want %v", got, tt.wantPaths)
 			}
 		})
 	}
@@ -487,6 +317,12 @@ func TestFilterByDate(t *testing.T) {
 		{Path: "old.go"},
 		{Path: "nodate.go"},
 	}
+	commits := []github.FileCommitInfo{
+		{Path: entries[0].Path, CommittedDate: now},
+		{Path: entries[1].Path, CommittedDate: oneWeekAgo},
+		{Path: entries[2].Path, CommittedDate: twoWeeksAgo},
+		{Path: entries[3].Path, CommittedDate: threeWeeksAgo},
+	}
 
 	tests := []struct {
 		name          string
@@ -495,121 +331,38 @@ func TestFilterByDate(t *testing.T) {
 		changedBefore *time.Time
 		wantPaths     []string
 	}{
+		{name: "no filters", wantPaths: treePaths(entries)},
+		{name: "changed after", changedAfter: &oneWeekAgo, wantPaths: treePaths(entries[:2])},
+		{name: "changed before", changedBefore: &twoWeeksAgo, wantPaths: treePaths(entries[2:4])},
+		{name: "date range", changedAfter: &threeWeeksAgo, changedBefore: &oneWeekAgo, wantPaths: treePaths(entries[1:4])},
 		{
-			name: "no date filters - returns all",
-			commits: []github.FileCommitInfo{
-				{Path: "recent.go", CommittedDate: now},
-				{Path: "week.go", CommittedDate: oneWeekAgo},
-				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
-				{Path: "old.go", CommittedDate: threeWeeksAgo},
-			},
-			changedAfter:  nil,
-			changedBefore: nil,
-			wantPaths:     []string{"recent.go", "week.go", "twoweeks.go", "old.go", "nodate.go"},
+			name:         "no matches: too old",
+			commits:      []github.FileCommitInfo{{Path: entries[2].Path, CommittedDate: twoWeeksAgo}, {Path: entries[3].Path, CommittedDate: threeWeeksAgo}},
+			changedAfter: &now,
 		},
 		{
-			name: "changed after filter - files newer than cutoff",
-			commits: []github.FileCommitInfo{
-				{Path: "recent.go", CommittedDate: now},
-				{Path: "week.go", CommittedDate: oneWeekAgo},
-				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
-				{Path: "old.go", CommittedDate: threeWeeksAgo},
-			},
-			changedAfter:  &oneWeekAgo,
-			changedBefore: nil,
-			wantPaths:     []string{"recent.go", "week.go"},
-		},
-		{
-			name: "changed before filter - files older than cutoff",
-			commits: []github.FileCommitInfo{
-				{Path: "recent.go", CommittedDate: now},
-				{Path: "week.go", CommittedDate: oneWeekAgo},
-				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
-				{Path: "old.go", CommittedDate: threeWeeksAgo},
-			},
-			changedAfter:  nil,
-			changedBefore: &twoWeeksAgo,
-			wantPaths:     []string{"twoweeks.go", "old.go"},
-		},
-		{
-			name: "both filters - date range",
-			commits: []github.FileCommitInfo{
-				{Path: "recent.go", CommittedDate: now},
-				{Path: "week.go", CommittedDate: oneWeekAgo},
-				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
-				{Path: "old.go", CommittedDate: threeWeeksAgo},
-			},
-			changedAfter:  &threeWeeksAgo,
-			changedBefore: &oneWeekAgo,
-			wantPaths:     []string{"week.go", "twoweeks.go", "old.go"},
-		},
-		{
-			name: "boundary - exact match on changedAfter",
-			commits: []github.FileCommitInfo{
-				{Path: "recent.go", CommittedDate: now},
-				{Path: "week.go", CommittedDate: oneWeekAgo},
-				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
-			},
-			changedAfter:  &oneWeekAgo,
-			changedBefore: nil,
-			wantPaths:     []string{"recent.go", "week.go"},
-		},
-		{
-			name: "boundary - exact match on changedBefore",
-			commits: []github.FileCommitInfo{
-				{Path: "recent.go", CommittedDate: now},
-				{Path: "week.go", CommittedDate: oneWeekAgo},
-				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
-			},
-			changedAfter:  nil,
-			changedBefore: &oneWeekAgo,
-			wantPaths:     []string{"week.go", "twoweeks.go"},
-		},
-		{
-			name: "no matches - all files too old",
-			commits: []github.FileCommitInfo{
-				{Path: "twoweeks.go", CommittedDate: twoWeeksAgo},
-				{Path: "old.go", CommittedDate: threeWeeksAgo},
-			},
-			changedAfter:  &now,
-			changedBefore: nil,
-			wantPaths:     []string{},
-		},
-		{
-			name: "no matches - all files too new",
-			commits: []github.FileCommitInfo{
-				{Path: "recent.go", CommittedDate: now},
-				{Path: "week.go", CommittedDate: oneWeekAgo},
-			},
-			changedAfter:  nil,
+			name:          "no matches: too new",
+			commits:       []github.FileCommitInfo{{Path: entries[0].Path, CommittedDate: now}, {Path: entries[1].Path, CommittedDate: oneWeekAgo}},
 			changedBefore: &threeWeeksAgo,
-			wantPaths:     []string{},
 		},
 		{
-			name: "missing commit data - file excluded",
-			commits: []github.FileCommitInfo{
-				{Path: "recent.go", CommittedDate: now},
-				{Path: "week.go", CommittedDate: oneWeekAgo},
-			},
-			changedAfter:  &twoWeeksAgo,
-			changedBefore: nil,
-			wantPaths:     []string{"recent.go", "week.go"},
+			name:         "missing commit data",
+			commits:      []github.FileCommitInfo{{Path: entries[0].Path, CommittedDate: now}, {Path: entries[1].Path, CommittedDate: oneWeekAgo}},
+			changedAfter: &twoWeeksAgo,
+			wantPaths:    treePaths(entries[:2]),
 		},
-		{
-			name:          "empty commit data",
-			commits:       []github.FileCommitInfo{},
-			changedAfter:  &oneWeekAgo,
-			changedBefore: nil,
-			wantPaths:     []string{},
-		},
+		{name: "empty commit data", commits: []github.FileCommitInfo{}, changedAfter: &oneWeekAgo},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := filterByDate(tt.commits, entries, tt.changedAfter, tt.changedBefore)
-
-			if !slices.Equal(treePaths(got), tt.wantPaths) {
-				t.Errorf("got %v, want %v", treePaths(got), tt.wantPaths)
+			input := tt.commits
+			if input == nil {
+				input = commits
+			}
+			got := treePaths(filterByDate(input, entries, tt.changedAfter, tt.changedBefore))
+			if !slices.Equal(got, tt.wantPaths) {
+				t.Errorf("got %v, want %v", got, tt.wantPaths)
 			}
 		})
 	}
