@@ -6,7 +6,13 @@ import (
 	"sync"
 
 	"github.com/jparise/gh-find/internal/github"
-	"github.com/mgutz/ansi"
+)
+
+const (
+	ansiCyan      = "0;36"
+	ansiBoldGreen = "0;1;32"
+	ansiWhite     = "0;37"
+	ansiYellow    = "0;33"
 )
 
 // Output handles all output formatting with optional color and hyperlink support.
@@ -14,34 +20,20 @@ type Output struct {
 	mu         sync.Mutex
 	stdout     io.Writer
 	stderr     io.Writer
+	colorize   bool
 	hyperlinks bool
-
-	cyan   func(string) string
-	green  func(string) string
-	white  func(string) string
-	yellow func(string) string
-	red    func(string) string
 }
 
 // NewOutput creates a new Output with optional color and hyperlink support.
 func NewOutput(stdout, stderr io.Writer, colorize, hyperlinks bool) *Output {
-	color := func(name string) func(string) string {
-		if colorize {
-			return ansi.ColorFunc(name)
-		}
-		return ansi.ColorFunc("")
-	}
+	return &Output{stdout: stdout, stderr: stderr, colorize: colorize, hyperlinks: hyperlinks}
+}
 
-	return &Output{
-		stdout:     stdout,
-		stderr:     stderr,
-		hyperlinks: hyperlinks,
-		cyan:       color("cyan"),
-		green:      color("green+b"),
-		white:      color("white"),
-		yellow:     color("yellow"),
-		red:        color("red+b"),
+func (o *Output) color(code, text string) string {
+	if !o.colorize {
+		return text
 	}
+	return "\033[" + code + "m" + text + "\033[0m"
 }
 
 func makeHyperlink(url, text string) string {
@@ -56,9 +48,9 @@ func (o *Output) Match(repo github.Repository, path string) {
 	}
 
 	formatted := fmt.Sprintf("%s/%s:%s",
-		o.cyan(repo.Owner),
-		o.green(repoName),
-		o.white(path))
+		o.color(ansiCyan, repo.Owner),
+		o.color(ansiBoldGreen, repoName),
+		o.color(ansiWhite, path))
 
 	if o.hyperlinks {
 		url := fmt.Sprintf("%s/blob/%s/%s", repo.URL, repo.Ref, path)
@@ -74,12 +66,5 @@ func (o *Output) Match(repo github.Repository, path string) {
 func (o *Output) Warningf(format string, args ...any) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	fmt.Fprintf(o.stderr, o.yellow("Warning: ")+format+"\n", args...)
-}
-
-// Infof writes a formatted informational message to stderr.
-func (o *Output) Infof(format string, args ...any) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	fmt.Fprintf(o.stderr, format+"\n", args...)
+	fmt.Fprintf(o.stderr, o.color(ansiYellow, "Warning: ")+format+"\n", args...)
 }
