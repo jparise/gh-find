@@ -150,55 +150,20 @@ func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([
 	return filtered, nil
 }
 
-// repoTypeAPIParams maps repository types to their GitHub API type parameter
-// for each owner type. Missing entries default to "all" (fetch all, filter client-side).
-//
-// Support matrix:
-//
-//	Sources:  orgs="sources", users="owner"
-//	Forks:    orgs="forks",   users=not supported
-//	Archives: not supported (filter client-side)
-//	Mirrors:  not supported (filter client-side)
-var repoTypeAPIParams = map[RepoType]map[OwnerType]string{
-	RepoTypeSources: {
-		OwnerTypeOrganization: "sources",
-		OwnerTypeUser:         "owner",
-	},
-	RepoTypeForks: {
-		OwnerTypeOrganization: "forks",
-	},
-}
-
 // mapRepoTypes returns the GitHub API type parameter for filtering repositories.
 // Returns "all" if the API doesn't support filtering the requested type(s).
 func mapRepoTypes(types RepoTypes, ownerType OwnerType) string {
-	var selected []RepoType
-
-	if types.Sources {
-		selected = append(selected, RepoTypeSources)
+	// Exact matches produce one selected type. Combinations fall back to "all".
+	switch {
+	case types == (RepoTypes{Sources: true}) && ownerType == OwnerTypeUser:
+		return "owner"
+	case types == (RepoTypes{Sources: true}) && ownerType == OwnerTypeOrganization:
+		return "sources"
+	case types == (RepoTypes{Forks: true}) && ownerType == OwnerTypeOrganization:
+		return "forks"
+	default:
+		return "all"
 	}
-	if types.Forks {
-		selected = append(selected, RepoTypeForks)
-	}
-	if types.Archives {
-		selected = append(selected, RepoTypeArchives)
-	}
-	if types.Mirrors {
-		selected = append(selected, RepoTypeMirrors)
-	}
-
-	// If only a single type is selected, attempt to map it to an API `type`
-	// parameter value as a server-side filtering optimization.
-	if len(selected) == 1 {
-		repoType := selected[0]
-		if params, ok := repoTypeAPIParams[repoType]; ok {
-			if apiParam, ok := params[ownerType]; ok {
-				return apiParam
-			}
-		}
-	}
-
-	return "all"
 }
 
 // GetRepo fetches a single repository.
