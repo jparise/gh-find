@@ -9,69 +9,12 @@ import (
 	"github.com/jparise/gh-find/internal/github"
 )
 
-func TestNewOutput(t *testing.T) {
-	tests := []struct {
-		name       string
-		colorize   bool
-		hyperlinks bool
-	}{
-		{
-			name:       "with colors and hyperlinks",
-			colorize:   true,
-			hyperlinks: true,
-		},
-		{
-			name:       "with colors only",
-			colorize:   true,
-			hyperlinks: false,
-		},
-		{
-			name:       "without colors or hyperlinks",
-			colorize:   false,
-			hyperlinks: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stdout := &bytes.Buffer{}
-			stderr := &bytes.Buffer{}
-
-			output := NewOutput(stdout, stderr, tt.colorize, tt.hyperlinks)
-			colorFuncs := []struct {
-				name string
-				fn   func(string) string
-			}{
-				{"cyan", output.cyan},
-				{"green", output.green},
-				{"white", output.white},
-				{"yellow", output.yellow},
-				{"red", output.red},
-			}
-			for _, cf := range colorFuncs {
-				if cf.fn == nil {
-					t.Errorf("NewOutput() %s color func is nil", cf.name)
-				}
-				s := cf.fn("test")
-				if tt.colorize {
-					if s == "test" {
-						t.Errorf("NewOutput() expected %s color func to return ANSI codes", cf.name)
-					}
-				} else {
-					if s != "test" {
-						t.Errorf("NewOutput() expected %s color func to return plain string, got %q", cf.name, s)
-					}
-				}
-			}
-		})
-	}
-}
-
 func TestMatch(t *testing.T) {
 	tests := []struct {
 		name       string
 		repo       github.Repository
 		path       string
+		colorize   bool
 		hyperlinks bool
 		want       string
 		wantURL    string
@@ -87,6 +30,18 @@ func TestMatch(t *testing.T) {
 			path:       "main.go",
 			hyperlinks: false,
 			want:       "cli/cli:main.go",
+		},
+		{
+			name: "colored match",
+			repo: github.Repository{
+				Owner: "color-owner",
+				Name:  "color-repo",
+				Ref:   "color-ref",
+				URL:   "https://example.com/color",
+			},
+			path:     "rainbow.txt",
+			colorize: true,
+			want:     "\x1b[0;36mcolor-owner\x1b[0m/\x1b[0;1;32mcolor-repo\x1b[0m:\x1b[0;37mrainbow.txt\x1b[0m",
 		},
 		{
 			name: "match with hyperlinks",
@@ -134,7 +89,7 @@ func TestMatch(t *testing.T) {
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
 
-			output := NewOutput(stdout, stderr, false, tt.hyperlinks)
+			output := NewOutput(stdout, stderr, tt.colorize, tt.hyperlinks)
 
 			output.Match(tt.repo, tt.path)
 			got := stdout.String()
@@ -194,46 +149,6 @@ func TestWarningf(t *testing.T) {
 	}
 }
 
-func TestInfof(t *testing.T) {
-	tests := []struct {
-		name   string
-		format string
-		args   []any
-		want   string
-	}{
-		{
-			name:   "simple info",
-			format: "processing repository",
-			want:   "processing repository",
-		},
-		{
-			name:   "with format args",
-			format: "searching %s/%s",
-			args:   []any{"owner", "repo"},
-			want:   "searching owner/repo",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stdout := &bytes.Buffer{}
-			stderr := &bytes.Buffer{}
-			output := NewOutput(stdout, stderr, false, false)
-
-			output.Infof(tt.format, tt.args...)
-			got := stderr.String()
-
-			if !strings.Contains(got, tt.want) {
-				t.Errorf("Infof() output = %q, want to contain %q", got, tt.want)
-			}
-
-			if stdout.Len() != 0 {
-				t.Errorf("Infof() wrote to stdout: %q", stdout.String())
-			}
-		})
-	}
-}
-
 func TestOutputThreadSafety(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -250,27 +165,17 @@ func TestOutputThreadSafety(t *testing.T) {
 	const numCalls = 100
 
 	var wg sync.WaitGroup
-	wg.Add(numGoroutines * 3)
-
 	for range numGoroutines {
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range numCalls {
 				output.Match(repo, "file.go")
 			}
-		}()
-		go func() {
-			defer wg.Done()
+		})
+		wg.Go(func() {
 			for range numCalls {
 				output.Warningf("warning")
 			}
-		}()
-		go func() {
-			defer wg.Done()
-			for range numCalls {
-				output.Infof("info")
-			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -281,7 +186,7 @@ func TestOutputThreadSafety(t *testing.T) {
 	if want := numGoroutines * numCalls; stdoutLines != want {
 		t.Errorf("stdout lines = %d, want %d", stdoutLines, want)
 	}
-	if want := numGoroutines * numCalls * 2; stderrLines != want {
-		t.Errorf("stderr lines = %d, want %d (Warningf + Infof)", stderrLines, want)
+	if want := numGoroutines * numCalls; stderrLines != want {
+		t.Errorf("stderr lines = %d, want %d", stderrLines, want)
 	}
 }
