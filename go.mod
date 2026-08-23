@@ -8,14 +8,12 @@ require (
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/sync v0.22.0
-	gopkg.in/h2non/gock.v1 v1.1.2
 )
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/cli/safeexec v1.0.0 // indirect
 	github.com/cli/shurcooL-graphql v0.0.4 // indirect
-	github.com/h2non/parth v0.0.0-20190131123155-b4df798d6542 // indirect
 	github.com/henvic/httpretty v0.0.6 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect

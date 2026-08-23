@@ -3,50 +3,107 @@ package github
 import (
 	"context"
 	"fmt"
-	"os"
+	"io"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"gopkg.in/h2non/gock.v1"
+	"github.com/cli/go-gh/v2/pkg/api"
 )
 
-func TestMain(m *testing.M) {
-	gock.DisableNetworking()
-	os.Exit(m.Run())
+const fakeToken = "fake-token"
+
+type mockResponse struct {
+	method      string
+	path        string
+	requestBody string
+	status      int
+	body        string
 }
 
-// testClient creates a new client for testing with sensible defaults.
-func testClient(t *testing.T) *Client {
-	t.Helper()
-	client, err := NewClient(ClientOptions{
-		AuthToken:    "fake-token",
-		DisableCache: true,
-	})
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
+type mockTransport struct {
+	t         *testing.T
+	responses []mockResponse
+	next      int
+}
+
+func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.t.Helper()
+	if err := req.Context().Err(); err != nil {
+		return nil, err
 	}
-	return client
+	if m.next == len(m.responses) {
+		m.t.Errorf("unexpected request: %s %s", req.Method, req.URL.RequestURI())
+		return nil, fmt.Errorf("unexpected request")
+	}
+
+	mock := m.responses[m.next]
+	m.next++
+	if req.Method != mock.method || req.URL.RequestURI() != mock.path {
+		m.t.Errorf("request = %s %s, want %s %s", req.Method, req.URL.RequestURI(), mock.method, mock.path)
+	}
+	if mock.requestBody != "" {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			m.t.Errorf("read request body: %v", err)
+		} else if string(body) != mock.requestBody {
+			m.t.Errorf("request body = %s, want %s", body, mock.requestBody)
+		}
+	}
+
+	return &http.Response{
+		StatusCode: mock.status,
+		Status:     fmt.Sprintf("%d %s", mock.status, http.StatusText(mock.status)),
+		Header:     http.Header{"Content-Type": {"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(mock.body)),
+		Request:    req,
+	}, nil
 }
 
-// assertMocksCalled registers cleanup to disable gock and verify all mocks were called.
-func assertMocksCalled(t *testing.T) {
+func getResponse(path string, status int, body string) mockResponse {
+	return mockResponse{method: http.MethodGet, path: path, status: status, body: body}
+}
+
+func graphqlResponse(query string, status int, body string) mockResponse {
+	return mockResponse{
+		method:      http.MethodPost,
+		path:        "/graphql",
+		requestBody: fmt.Sprintf(`{"query":%q,"variables":null}`, query),
+		status:      status,
+		body:        body,
+	}
+}
+
+func testClient(t *testing.T, responses ...mockResponse) *Client {
 	t.Helper()
-	t.Cleanup(gock.Off)
+	transport := &mockTransport{t: t, responses: responses}
 	t.Cleanup(func() {
-		if !gock.IsDone() {
-			t.Errorf("not all mocks were called: %v", gock.Pending())
+		if transport.next != len(responses) {
+			t.Errorf("used %d of %d mock responses", transport.next, len(responses))
 		}
 	})
+
+	opts := api.ClientOptions{
+		AuthToken:    fakeToken,
+		Host:         "github.com",
+		Transport:    transport,
+		LogIgnoreEnv: true,
+	}
+	rest, err := api.NewRESTClient(opts)
+	if err != nil {
+		t.Fatalf("failed to create REST client: %v", err)
+	}
+	graphql, err := api.NewGraphQLClient(opts)
+	if err != nil {
+		t.Fatalf("failed to create GraphQL client: %v", err)
+	}
+	return &Client{rest: rest, graphql: graphql}
 }
 
-// mockOwnerType sets up a gock mock for the GET /users/{username} endpoint.
-func mockOwnerType(username, ownerType string) {
-	gock.New("https://api.github.com").
-		Get("/users/" + username).
-		Reply(200).
-		JSON(fmt.Sprintf(`{"type": %q, "login": %q}`, ownerType, username))
+func ownerTypeResponse(username, ownerType string) mockResponse {
+	return getResponse("/users/"+username, 200, fmt.Sprintf(`{"type": %q, "login": %q}`, ownerType, username))
 }
 
 // assertError checks if an error matches expectations and reports failure.
@@ -120,7 +177,7 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "default options",
 			opts: ClientOptions{
-				AuthToken:    "fake-token",
+				AuthToken:    fakeToken,
 				CacheDir:     "",
 				CacheTTL:     24 * time.Hour,
 				DisableCache: false,
@@ -130,7 +187,7 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "cache disabled",
 			opts: ClientOptions{
-				AuthToken:    "fake-token",
+				AuthToken:    fakeToken,
 				CacheDir:     "",
 				CacheTTL:     0,
 				DisableCache: true,
@@ -140,7 +197,7 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "custom cache directory",
 			opts: ClientOptions{
-				AuthToken:    "fake-token",
+				AuthToken:    fakeToken,
 				CacheDir:     "/tmp/test-cache",
 				CacheTTL:     time.Hour,
 				DisableCache: false,
@@ -150,7 +207,7 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "custom cache TTL",
 			opts: ClientOptions{
-				AuthToken:    "fake-token",
+				AuthToken:    fakeToken,
 				CacheDir:     "",
 				CacheTTL:     30 * time.Minute,
 				DisableCache: false,
@@ -327,14 +384,7 @@ func TestGetOwnerType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertMocksCalled(t)
-
-			gock.New("https://api.github.com").
-				Get("/users/" + tt.username).
-				Reply(tt.mockStatus).
-				JSON(tt.mockBody)
-
-			client := testClient(t)
+			client := testClient(t, getResponse("/users/"+tt.username, tt.mockStatus, tt.mockBody))
 
 			got, err := client.GetOwnerType(context.Background(), tt.username)
 			if !assertError(t, err, tt.wantErr, "GetOwnerType()") {
@@ -350,13 +400,6 @@ func TestGetOwnerType(t *testing.T) {
 
 // TestGetOwnerType_ContextCanceled tests context cancellation.
 func TestGetOwnerType_ContextCanceled(t *testing.T) {
-	assertMocksCalled(t)
-
-	gock.New("https://api.github.com").
-		Get("/users/octocat").
-		Reply(200).
-		JSON(`{"type": "User"}`)
-
 	client := testClient(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -541,32 +584,19 @@ func TestListRepos(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertMocksCalled(t)
-
-			// Mock owner type check
-			mockOwnerType(tt.username, tt.mockOwnerType)
-
-			// Determine endpoint based on owner type
-			var endpoint string
+			responses := []mockResponse{ownerTypeResponse(tt.username, tt.mockOwnerType)}
+			endpoint := "/users/" + tt.username + "/repos"
+			ownerType := OwnerTypeUser
 			if tt.mockOwnerType == "Organization" {
 				endpoint = "/orgs/" + tt.username + "/repos"
-			} else {
-				endpoint = "/users/" + tt.username + "/repos"
+				ownerType = OwnerTypeOrganization
 			}
-
-			// Mock paginated responses
 			for i, pageBody := range tt.mockPages {
-				page := i + 1
-				gock.New("https://api.github.com").
-					Get(endpoint).
-					MatchParam("page", fmt.Sprintf("%d", page)).
-					MatchParam("per_page", fmt.Sprintf("%d", pageSize)).
-					Reply(200).
-					JSON(pageBody)
+				path := fmt.Sprintf("%s?type=%s&per_page=%d&page=%d", endpoint, mapRepoTypes(tt.repoTypes, ownerType), pageSize, i+1)
+				responses = append(responses, getResponse(path, 200, pageBody))
 			}
 
-			client := testClient(t)
-
+			client := testClient(t, responses...)
 			repos, err := client.ListRepos(context.Background(), tt.username, tt.repoTypes)
 			if !assertError(t, err, tt.wantErr, "ListRepos()") {
 				return
@@ -674,14 +704,8 @@ func TestGetRepo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertMocksCalled(t)
-
-			gock.New("https://api.github.com").
-				Get("/repos/" + tt.owner + "/" + tt.repo).
-				Reply(tt.mockStatus).
-				JSON(tt.mockBody)
-
-			client := testClient(t)
+			path := "/repos/" + tt.owner + "/" + tt.repo
+			client := testClient(t, getResponse(path, tt.mockStatus, tt.mockBody))
 
 			repo, err := client.GetRepo(context.Background(), tt.owner, tt.repo)
 			if !assertError(t, err, tt.wantErr, "GetRepo()") {
@@ -784,15 +808,8 @@ func TestGetTree(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertMocksCalled(t)
-
-			gock.New("https://api.github.com").
-				Get("/repos/"+tt.repo.Owner+"/"+tt.repo.Name+"/git/trees/"+tt.repo.Ref).
-				MatchParam("recursive", "1").
-				Reply(tt.mockStatus).
-				JSON(tt.mockBody)
-
-			client := testClient(t)
+			path := "/repos/" + tt.repo.Owner + "/" + tt.repo.Name + "/git/trees/" + tt.repo.Ref + "?recursive=1"
+			client := testClient(t, getResponse(path, tt.mockStatus, tt.mockBody))
 
 			tree, err := client.GetTree(context.Background(), tt.repo)
 			if !assertError(t, err, tt.wantErr, "GetTree()") {

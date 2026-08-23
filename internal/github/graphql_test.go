@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"gopkg.in/h2non/gock.v1"
 )
 
 func TestBuildFileHistoryQuery(t *testing.T) {
@@ -105,18 +103,13 @@ func TestGetFileCommitDates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertMocksCalled(t)
-
+			var responses []mockResponse
 			if tt.mockStatus != 0 {
 				query := buildFileHistoryQuery("cli", "cli", "main", tt.paths)
-				gock.New("https://api.github.com").
-					Post("/graphql").
-					BodyString(fmt.Sprintf(`{"query":%q,"variables":null}`, query)).
-					Reply(tt.mockStatus).
-					JSON(tt.mockBody)
+				responses = append(responses, graphqlResponse(query, tt.mockStatus, tt.mockBody))
 			}
 
-			client := testClient(t)
+			client := testClient(t, responses...)
 			repo := Repository{Owner: "cli", Name: "cli", Ref: "main"}
 			got, err := client.GetFileCommitDates(context.Background(), repo, tt.paths)
 
@@ -153,8 +146,6 @@ func TestGetFileCommitDates(t *testing.T) {
 }
 
 func TestGetFileCommitDates_MultipleBatches(t *testing.T) {
-	assertMocksCalled(t)
-
 	// Create 150 files to trigger 2 batches (100 + 50)
 	paths := make([]string, 150)
 	for i := range paths {
@@ -162,21 +153,17 @@ func TestGetFileCommitDates_MultipleBatches(t *testing.T) {
 	}
 
 	// Mock both batches
+	responses := make([]mockResponse, 0, 2)
 	for batchNum := range 2 {
 		start := batchNum * 100
 		end := min(start+100, len(paths))
 		batch := paths[start:end]
 		query := buildFileHistoryQuery("cli", "cli", "main", batch)
 		response := buildBatchResponse(len(batch), "2024-01-15T10:00:00Z")
-
-		gock.New("https://api.github.com").
-			Post("/graphql").
-			BodyString(fmt.Sprintf(`{"query":%q,"variables":null}`, query)).
-			Reply(200).
-			JSON(response)
+		responses = append(responses, graphqlResponse(query, 200, response))
 	}
 
-	client := testClient(t)
+	client := testClient(t, responses...)
 	repo := Repository{Owner: "cli", Name: "cli", Ref: "main"}
 
 	got, err := client.GetFileCommitDates(context.Background(), repo, paths)
