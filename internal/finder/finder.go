@@ -95,16 +95,14 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 			return err
 		}
 
-		wg.Add(1)
-		go func(repo github.Repository) {
-			defer wg.Done()
+		wg.Go(func() {
 			defer sem.Release(1)
 
 			if err := f.searchRepo(ctx, repo, opts); err != nil {
 				errorCount.Add(1)
 				f.output.Warningf("%s: %v", repo.FullName, err)
 			}
-		}(repo)
+		})
 	}
 
 	wg.Wait()
