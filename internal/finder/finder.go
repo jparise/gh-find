@@ -181,6 +181,9 @@ func filterByPattern(entries []github.TreeEntry, pattern string, fullPath, ignor
 	if ignoreCase {
 		pattern = strings.ToLower(pattern)
 	}
+	if !doublestar.ValidatePattern(pattern) {
+		return nil, fmt.Errorf("invalid pattern %q", pattern)
+	}
 
 	var filtered []github.TreeEntry
 	for _, entry := range entries {
@@ -192,12 +195,7 @@ func filterByPattern(entries []github.TreeEntry, pattern string, fullPath, ignor
 			matchPath = strings.ToLower(matchPath)
 		}
 
-		matched, err := doublestar.Match(pattern, matchPath)
-		if err != nil {
-			return nil, fmt.Errorf("pattern %q failed to match path %q: %w", pattern, entry.Path, err)
-		}
-
-		if matched {
+		if doublestar.MatchUnvalidated(pattern, matchPath) {
 			filtered = append(filtered, entry)
 		}
 	}
@@ -217,6 +215,11 @@ func filterByExcludes(entries []github.TreeEntry, excludes []string, fullPath, i
 		}
 		excludes = normalized
 	}
+	for _, exclude := range excludes {
+		if !doublestar.ValidatePattern(exclude) {
+			return nil, fmt.Errorf("invalid exclude pattern %q", exclude)
+		}
+	}
 
 	var filtered []github.TreeEntry
 	for _, entry := range entries {
@@ -230,12 +233,7 @@ func filterByExcludes(entries []github.TreeEntry, excludes []string, fullPath, i
 
 		excluded := false
 		for _, excludePattern := range excludes {
-			isExcluded, err := doublestar.Match(excludePattern, matchPath)
-			if err != nil {
-				return nil, fmt.Errorf("exclude pattern %q failed to match path %q: %w",
-					excludePattern, entry.Path, err)
-			}
-			if isExcluded {
+			if doublestar.MatchUnvalidated(excludePattern, matchPath) {
 				excluded = true
 				break
 			}

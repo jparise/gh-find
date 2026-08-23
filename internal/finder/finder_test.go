@@ -250,6 +250,15 @@ func TestFilterByExcludes(t *testing.T) {
 	}
 }
 
+func TestInvalidPatterns(t *testing.T) {
+	if _, err := filterByPattern(nil, "[", false, false); err == nil {
+		t.Error("filterByPattern() accepted an invalid pattern")
+	}
+	if _, err := filterByExcludes(nil, []string{"["}, false, false); err == nil {
+		t.Error("filterByExcludes() accepted an invalid pattern")
+	}
+}
+
 func TestFilterByExtension(t *testing.T) {
 	entries := []github.TreeEntry{
 		{Path: "main.go"},
