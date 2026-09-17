@@ -66,14 +66,6 @@ const (
 	RepoTypeMirrors RepoType = "mirrors"
 )
 
-// ValidRepoTypes is the list of valid repository type values.
-var ValidRepoTypes = []string{
-	string(RepoTypeSources),
-	string(RepoTypeForks),
-	string(RepoTypeArchives),
-	string(RepoTypeMirrors),
-}
-
 // RepoTypes represents a set of repository types to include.
 type RepoTypes struct {
 	Sources  bool
