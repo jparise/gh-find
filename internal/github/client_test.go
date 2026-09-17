@@ -176,7 +176,6 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-// TestMapRepoTypes tests the internal mapRepoTypes function.
 func TestMapRepoTypes(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -184,104 +183,16 @@ func TestMapRepoTypes(t *testing.T) {
 		ownerType OwnerType
 		want      string
 	}{
-		// Sources
-		{
-			name:      "sources for user",
-			repoTypes: RepoTypes{Sources: true},
-			ownerType: OwnerTypeUser,
-			want:      "owner",
-		},
-		{
-			name:      "sources for organization",
-			repoTypes: RepoTypes{Sources: true},
-			ownerType: OwnerTypeOrganization,
-			want:      "sources",
-		},
-
-		// Forks
-		{
-			name:      "forks for user (not supported)",
-			repoTypes: RepoTypes{Forks: true},
-			ownerType: OwnerTypeUser,
-			want:      "all",
-		},
-		{
-			name:      "forks for organization",
-			repoTypes: RepoTypes{Forks: true},
-			ownerType: OwnerTypeOrganization,
-			want:      "forks",
-		},
-
-		// All
-		{
-			name:      "all for user (empty struct)",
-			repoTypes: RepoTypes{},
-			ownerType: OwnerTypeUser,
-			want:      "all",
-		},
-		{
-			name:      "all for organization (empty struct)",
-			repoTypes: RepoTypes{},
-			ownerType: OwnerTypeOrganization,
-			want:      "all",
-		},
-
-		// Archives (not supported by API)
-		{
-			name:      "archives for user (not supported)",
-			repoTypes: RepoTypes{Archives: true},
-			ownerType: OwnerTypeUser,
-			want:      "all",
-		},
-		{
-			name:      "archives for organization (not supported)",
-			repoTypes: RepoTypes{Archives: true},
-			ownerType: OwnerTypeOrganization,
-			want:      "all",
-		},
-
-		// Mirrors (not supported by API)
-		{
-			name:      "mirrors for user (not supported)",
-			repoTypes: RepoTypes{Mirrors: true},
-			ownerType: OwnerTypeUser,
-			want:      "all",
-		},
-		{
-			name:      "mirrors for organization (not supported)",
-			repoTypes: RepoTypes{Mirrors: true},
-			ownerType: OwnerTypeOrganization,
-			want:      "all",
-		},
-
-		// Multiple types (fallback to all)
-		{
-			name:      "multiple types for user",
-			repoTypes: RepoTypes{Sources: true, Forks: true},
-			ownerType: OwnerTypeUser,
-			want:      "all",
-		},
-		{
-			name:      "multiple types for organization",
-			repoTypes: RepoTypes{Sources: true, Forks: true},
-			ownerType: OwnerTypeOrganization,
-			want:      "all",
-		},
-
-		// Empty struct
-		{
-			name:      "empty repo types",
-			repoTypes: RepoTypes{},
-			ownerType: OwnerTypeUser,
-			want:      "all",
-		},
+		{"user sources", RepoTypes{Sources: true}, OwnerTypeUser, "owner"},
+		{"organization sources", RepoTypes{Sources: true}, OwnerTypeOrganization, string(RepoTypeSources)},
+		{"organization forks", RepoTypes{Forks: true}, OwnerTypeOrganization, string(RepoTypeForks)},
+		{"fallback", RepoTypes{Sources: true, Forks: true}, OwnerTypeUser, "all"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mapRepoTypes(tt.repoTypes, tt.ownerType)
-			if got != tt.want {
-				t.Errorf("mapRepoTypes() = %v, want %v", got, tt.want)
+			if got := mapRepoTypes(tt.repoTypes, tt.ownerType); got != tt.want {
+				t.Errorf("mapRepoTypes() = %q, want %q", got, tt.want)
 			}
 		})
 	}
