@@ -178,34 +178,33 @@ func TestNewClient(t *testing.T) {
 
 func TestMapRepoTypes(t *testing.T) {
 	tests := []struct {
-		name      string
-		repoTypes RepoTypes
-		ownerType OwnerType
-		want      string
+		name           string
+		repoTypes      RepoTypes
+		isOrganization bool
+		want           string
 	}{
-		{"user sources", RepoTypes{Sources: true}, OwnerTypeUser, "owner"},
-		{"organization sources", RepoTypes{Sources: true}, OwnerTypeOrganization, string(RepoTypeSources)},
-		{"organization forks", RepoTypes{Forks: true}, OwnerTypeOrganization, string(RepoTypeForks)},
-		{"fallback", RepoTypes{Sources: true, Forks: true}, OwnerTypeUser, "all"},
+		{"user sources", RepoTypes{Sources: true}, false, "owner"},
+		{"organization sources", RepoTypes{Sources: true}, true, string(RepoTypeSources)},
+		{"organization forks", RepoTypes{Forks: true}, true, string(RepoTypeForks)},
+		{"fallback", RepoTypes{Sources: true, Forks: true}, false, "all"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := mapRepoTypes(tt.repoTypes, tt.ownerType); got != tt.want {
+			if got := mapRepoTypes(tt.repoTypes, tt.isOrganization); got != tt.want {
 				t.Errorf("mapRepoTypes() = %q, want %q", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestGetOwnerType tests owner type detection.
-func TestGetOwnerType(t *testing.T) {
+func TestIsOrganization(t *testing.T) {
 	tests := []struct {
 		name       string
 		username   string
 		mockStatus int
 		mockBody   string
-		want       OwnerType
+		want       bool
 		wantErr    bool
 	}{
 		{
@@ -213,7 +212,7 @@ func TestGetOwnerType(t *testing.T) {
 			username:   "octocat",
 			mockStatus: 200,
 			mockBody:   `{"type": "User", "login": "octocat"}`,
-			want:       OwnerTypeUser,
+			want:       false,
 			wantErr:    false,
 		},
 		{
@@ -221,7 +220,7 @@ func TestGetOwnerType(t *testing.T) {
 			username:   "github",
 			mockStatus: 200,
 			mockBody:   `{"type": "Organization", "login": "github"}`,
-			want:       OwnerTypeOrganization,
+			want:       true,
 			wantErr:    false,
 		},
 		{
@@ -244,26 +243,25 @@ func TestGetOwnerType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := testClient(t, getResponse("/users/"+tt.username, tt.mockStatus, tt.mockBody))
 
-			got, err := client.GetOwnerType(context.Background(), tt.username)
-			if !assertError(t, err, tt.wantErr, "GetOwnerType()") {
+			got, err := client.isOrganization(context.Background(), tt.username)
+			if !assertError(t, err, tt.wantErr, "isOrganization()") {
 				return
 			}
 
 			if !tt.wantErr && got != tt.want {
-				t.Errorf("GetOwnerType() = %v, want %v", got, tt.want)
+				t.Errorf("isOrganization() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestGetOwnerType_ContextCanceled tests context cancellation.
-func TestGetOwnerType_ContextCanceled(t *testing.T) {
+func TestIsOrganizationContextCanceled(t *testing.T) {
 	client := testClient(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	_, err := client.GetOwnerType(ctx, "octocat")
+	_, err := client.isOrganization(ctx, "octocat")
 	if err == nil {
 		t.Error("expected context canceled error")
 	}
@@ -444,13 +442,12 @@ func TestListRepos(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			responses := []mockResponse{ownerTypeResponse(tt.username, tt.mockOwnerType)}
 			endpoint := "/users/" + tt.username + "/repos"
-			ownerType := OwnerTypeUser
-			if tt.mockOwnerType == "Organization" {
+			isOrganization := tt.mockOwnerType == "Organization"
+			if isOrganization {
 				endpoint = "/orgs/" + tt.username + "/repos"
-				ownerType = OwnerTypeOrganization
 			}
 			for i, pageBody := range tt.mockPages {
-				path := fmt.Sprintf("%s?type=%s&per_page=%d&page=%d", endpoint, mapRepoTypes(tt.repoTypes, ownerType), pageSize, i+1)
+				path := fmt.Sprintf("%s?type=%s&per_page=%d&page=%d", endpoint, mapRepoTypes(tt.repoTypes, isOrganization), pageSize, i+1)
 				responses = append(responses, getResponse(path, 200, pageBody))
 			}
 
