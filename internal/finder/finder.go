@@ -15,7 +15,6 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/jparise/gh-find/internal/github"
-	"golang.org/x/sync/semaphore"
 )
 
 // Finder orchestrates the file finding process.
@@ -87,16 +86,22 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 	// Process repositories concurrently with bounded parallelism
 	var wg sync.WaitGroup
 	var errorCount atomic.Int32
-	sem := semaphore.NewWeighted(int64(opts.Jobs))
+	slots := make(chan struct{}, opts.Jobs)
 
 	for _, repo := range repos {
-		if err := sem.Acquire(ctx, 1); err != nil {
+		if err := ctx.Err(); err != nil {
 			wg.Wait()
 			return err
 		}
+		select {
+		case slots <- struct{}{}:
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		}
 
 		wg.Go(func() {
-			defer sem.Release(1)
+			defer func() { <-slots }()
 
 			if err := f.searchRepo(ctx, repo, opts); err != nil {
 				errorCount.Add(1)
