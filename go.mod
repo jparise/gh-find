@@ -6,7 +6,6 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/cli/go-gh/v2 v2.16.0
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/sync v0.23.0
 )
 
 require (
