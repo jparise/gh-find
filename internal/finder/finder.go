@@ -220,18 +220,13 @@ func filterByExcludes(entries []github.TreeEntry, excludes []string, fullPath, i
 	}), nil
 }
 
-func filterByDate(commits []github.FileCommitInfo, entries []github.TreeEntry, changedAfter, changedBefore *time.Time) []github.TreeEntry {
+func filterByDate(commitDates map[string]time.Time, entries []github.TreeEntry, changedAfter, changedBefore *time.Time) []github.TreeEntry {
 	if changedAfter == nil && changedBefore == nil {
 		return entries
 	}
 
-	pathDates := make(map[string]time.Time, len(commits))
-	for _, info := range commits {
-		pathDates[info.Path] = info.CommittedDate
-	}
-
 	return slices.DeleteFunc(slices.Clone(entries), func(entry github.TreeEntry) bool {
-		commitDate, ok := pathDates[entry.Path]
+		commitDate, ok := commitDates[entry.Path]
 		return !ok ||
 			(changedAfter != nil && commitDate.Before(*changedAfter)) ||
 			(changedBefore != nil && commitDate.After(*changedBefore))
@@ -269,12 +264,12 @@ func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *O
 			paths[i] = entry.Path
 		}
 
-		commits, err := f.client.GetFileCommitDates(ctx, repo, paths)
+		commitDates, err := f.client.GetFileCommitDates(ctx, repo, paths)
 		if err != nil {
 			return err
 		}
 
-		entries = filterByDate(commits, entries, opts.ChangedAfter, opts.ChangedBefore)
+		entries = filterByDate(commitDates, entries, opts.ChangedAfter, opts.ChangedBefore)
 	}
 
 	for _, entry := range entries {

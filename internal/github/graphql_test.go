@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -122,24 +123,17 @@ func TestGetFileCommitDates(t *testing.T) {
 				t.Errorf("GetFileCommitDates() returned %d results, want %d", len(got), tt.wantCount)
 			}
 
-			// Verify all returned results have valid paths and dates
-			for i, result := range got {
-				if result.Path == "" {
-					t.Errorf("result[%d] has empty path", i)
+			for path, date := range got {
+				if !slices.Contains(tt.paths, path) {
+					t.Errorf("unexpected result path %q", path)
 				}
-				if result.CommittedDate.IsZero() {
-					t.Errorf("result[%d] has zero commit date", i)
-				}
-				if !tt.wantErr && i < len(tt.paths) && result.Path != tt.paths[i] {
-					t.Errorf("result[%d].Path = %q, want %q", i, result.Path, tt.paths[i])
+				if date.IsZero() {
+					t.Errorf("result %q has zero commit date", path)
 				}
 			}
 
-			// Verify first result in detail
-			if !tt.wantErr && len(got) > 0 && got[0].Path == "README.md" {
-				if !got[0].CommittedDate.Equal(testDate) {
-					t.Errorf("first result CommittedDate = %v, want %v", got[0].CommittedDate, testDate)
-				}
+			if date, ok := got["README.md"]; ok && !date.Equal(testDate) {
+				t.Errorf("README.md commit date = %v, want %v", date, testDate)
 			}
 		})
 	}

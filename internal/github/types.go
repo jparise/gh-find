@@ -3,7 +3,6 @@ package github
 import (
 	"encoding/json"
 	"strings"
-	"time"
 )
 
 // Repository represents a GitHub repository.
@@ -51,12 +50,6 @@ type TreeEntry struct {
 type TreeResponse struct {
 	Tree      []TreeEntry `json:"tree"`
 	Truncated bool        `json:"truncated"`
-}
-
-// FileCommitInfo holds the last commit timestamp for a file.
-type FileCommitInfo struct {
-	Path          string
-	CommittedDate time.Time
 }
 
 // RepoType represents a GitHub repository classification.

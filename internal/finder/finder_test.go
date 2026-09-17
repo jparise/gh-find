@@ -326,16 +326,16 @@ func TestFilterByDate(t *testing.T) {
 		{Path: "old.go"},
 		{Path: "nodate.go"},
 	}
-	commits := []github.FileCommitInfo{
-		{Path: entries[0].Path, CommittedDate: now},
-		{Path: entries[1].Path, CommittedDate: oneWeekAgo},
-		{Path: entries[2].Path, CommittedDate: twoWeeksAgo},
-		{Path: entries[3].Path, CommittedDate: threeWeeksAgo},
+	commitDates := map[string]time.Time{
+		entries[0].Path: now,
+		entries[1].Path: oneWeekAgo,
+		entries[2].Path: twoWeeksAgo,
+		entries[3].Path: threeWeeksAgo,
 	}
 
 	tests := []struct {
 		name          string
-		commits       []github.FileCommitInfo
+		commitDates   map[string]time.Time
 		changedAfter  *time.Time
 		changedBefore *time.Time
 		wantPaths     []string
@@ -346,28 +346,28 @@ func TestFilterByDate(t *testing.T) {
 		{name: "date range", changedAfter: &threeWeeksAgo, changedBefore: &oneWeekAgo, wantPaths: treePaths(entries[1:4])},
 		{
 			name:         "no matches: too old",
-			commits:      []github.FileCommitInfo{{Path: entries[2].Path, CommittedDate: twoWeeksAgo}, {Path: entries[3].Path, CommittedDate: threeWeeksAgo}},
+			commitDates:  map[string]time.Time{entries[2].Path: twoWeeksAgo, entries[3].Path: threeWeeksAgo},
 			changedAfter: &now,
 		},
 		{
 			name:          "no matches: too new",
-			commits:       []github.FileCommitInfo{{Path: entries[0].Path, CommittedDate: now}, {Path: entries[1].Path, CommittedDate: oneWeekAgo}},
+			commitDates:   map[string]time.Time{entries[0].Path: now, entries[1].Path: oneWeekAgo},
 			changedBefore: &threeWeeksAgo,
 		},
 		{
 			name:         "missing commit data",
-			commits:      []github.FileCommitInfo{{Path: entries[0].Path, CommittedDate: now}, {Path: entries[1].Path, CommittedDate: oneWeekAgo}},
+			commitDates:  map[string]time.Time{entries[0].Path: now, entries[1].Path: oneWeekAgo},
 			changedAfter: &twoWeeksAgo,
 			wantPaths:    treePaths(entries[:2]),
 		},
-		{name: "empty commit data", commits: []github.FileCommitInfo{}, changedAfter: &oneWeekAgo},
+		{name: "empty commit data", commitDates: map[string]time.Time{}, changedAfter: &oneWeekAgo},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			input := tt.commits
+			input := tt.commitDates
 			if input == nil {
-				input = commits
+				input = commitDates
 			}
 			got := treePaths(filterByDate(input, entries, tt.changedAfter, tt.changedBefore))
 			if !slices.Equal(got, tt.wantPaths) {

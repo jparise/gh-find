@@ -15,12 +15,12 @@ const (
 )
 
 // GetFileCommitDates fetches the last commit date for multiple files.
-func (c *Client) GetFileCommitDates(ctx context.Context, repo Repository, paths []string) ([]FileCommitInfo, error) {
+func (c *Client) GetFileCommitDates(ctx context.Context, repo Repository, paths []string) (map[string]time.Time, error) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
 
-	results := make([]FileCommitInfo, 0, len(paths))
+	results := make(map[string]time.Time, len(paths))
 
 	// Process files in batches to stay within GraphQL API limits.
 	for i := 0; i < len(paths); i += batchSize {
@@ -54,10 +54,7 @@ func (c *Client) GetFileCommitDates(ctx context.Context, repo Repository, paths 
 				continue // File doesn't exist or no commit history
 			}
 
-			results = append(results, FileCommitInfo{
-				Path:          path,
-				CommittedDate: history.Nodes[0].CommittedDate,
-			})
+			results[path] = history.Nodes[0].CommittedDate
 		}
 	}
 
