@@ -141,7 +141,7 @@ func (f *repoTypesFlag) Set(v string) error {
 		case github.RepoTypeMirrors:
 			f.Mirrors = true
 		default:
-			return fmt.Errorf("invalid repo type %q: must be one of %s, or all", part, strings.Join(github.ValidRepoTypes, ", "))
+			return fmt.Errorf("invalid repo type %q: must be one of sources, forks, archives, mirrors, or all", part)
 		}
 	}
 
