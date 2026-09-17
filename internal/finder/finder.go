@@ -17,26 +17,13 @@ import (
 	"github.com/jparise/gh-find/internal/github"
 )
 
-// Finder orchestrates the file finding process.
-type Finder struct {
-	output *Output
-	client *github.Client
-}
-
-// New creates a new Finder.
-func New(stdout, stderr io.Writer, colorize, hyperlinks bool) *Finder {
-	return &Finder{
-		output: NewOutput(stdout, stderr, colorize, hyperlinks),
-	}
-}
-
 // Find executes the search based on the provided options.
-func (f *Finder) Find(ctx context.Context, opts *Options) error {
+func Find(ctx context.Context, stdout, stderr io.Writer, colorize, hyperlinks bool, opts *Options) error {
 	client, err := github.NewClient(opts.ClientOpts)
 	if err != nil {
 		return err
 	}
-	f.client = client
+	output := NewOutput(stdout, stderr, colorize, hyperlinks)
 
 	var allRepos []github.Repository
 
@@ -45,9 +32,9 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 
 		// Fetch either the single named repo or all of an owner's repos.
 		if spec.Repo != "" {
-			r, err := f.client.GetRepo(ctx, spec.Owner, spec.Repo)
+			r, err := client.GetRepo(ctx, spec.Owner, spec.Repo)
 			if err != nil {
-				f.output.Warningf("%s/%s: %v", spec.Owner, spec.Repo, err)
+				output.Warningf("%s/%s: %v", spec.Owner, spec.Repo, err)
 				continue
 			}
 			if spec.Ref != "" {
@@ -56,7 +43,7 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 			}
 			repos = []github.Repository{r}
 		} else {
-			repos, err = f.client.ListRepos(ctx, spec.Owner, opts.RepoTypes)
+			repos, err = client.ListRepos(ctx, spec.Owner, opts.RepoTypes)
 			if err != nil {
 				return err
 			}
@@ -79,7 +66,7 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 	}
 
 	if len(repos) == 0 {
-		f.output.Warningf("No repositories match the filter")
+		output.Warningf("No repositories match the filter")
 		return nil
 	}
 
@@ -103,9 +90,9 @@ func (f *Finder) Find(ctx context.Context, opts *Options) error {
 		wg.Go(func() {
 			defer func() { <-slots }()
 
-			if err := f.searchRepo(ctx, repo, opts); err != nil {
+			if err := searchRepo(ctx, client, output, repo, opts); err != nil {
 				errorCount.Add(1)
-				f.output.Warningf("%s: %v", repo.FullName, err)
+				output.Warningf("%s: %v", repo.FullName, err)
 			}
 		})
 	}
@@ -233,14 +220,14 @@ func filterByDate(commitDates map[string]time.Time, entries []github.TreeEntry, 
 	})
 }
 
-func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *Options) error {
-	tree, err := f.client.GetTree(ctx, repo)
+func searchRepo(ctx context.Context, client *github.Client, output *Output, repo github.Repository, opts *Options) error {
+	tree, err := client.GetTree(ctx, repo)
 	if err != nil {
 		return err
 	}
 
 	if tree.Truncated {
-		f.output.Warningf("%s: exceeds GitHub's API limit (100k files or 7MB) - results are incomplete", repo.FullName)
+		output.Warningf("%s: exceeds GitHub's API limit (100k files or 7MB) - results are incomplete", repo.FullName)
 	}
 
 	entries := tree.Tree
@@ -264,7 +251,7 @@ func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *O
 			paths[i] = entry.Path
 		}
 
-		commitDates, err := f.client.GetFileCommitDates(ctx, repo, paths)
+		commitDates, err := client.GetFileCommitDates(ctx, repo, paths)
 		if err != nil {
 			return err
 		}
@@ -273,7 +260,7 @@ func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *O
 	}
 
 	for _, entry := range entries {
-		f.output.Match(repo, entry.Path)
+		output.Match(repo, entry.Path)
 	}
 
 	return nil

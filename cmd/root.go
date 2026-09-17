@@ -520,7 +520,5 @@ func run(cmd *cobra.Command, args []string) error {
 		Jobs: int(jobs),
 	}
 
-	// Create finder and run search
-	f := finder.New(cmd.OutOrStdout(), cmd.ErrOrStderr(), colorize, hyperlinks)
-	return f.Find(ctx, opts)
+	return finder.Find(ctx, cmd.OutOrStdout(), cmd.ErrOrStderr(), colorize, hyperlinks, opts)
 }
