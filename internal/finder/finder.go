@@ -119,14 +119,9 @@ func filterByType(entries []github.TreeEntry, types []github.FileType) []github.
 		return entries
 	}
 
-	var filtered []github.TreeEntry
-	for _, entry := range entries {
-		fileType := github.ParseFileType(entry.Mode)
-		if slices.Contains(types, fileType) {
-			filtered = append(filtered, entry)
-		}
-	}
-	return filtered
+	return slices.DeleteFunc(slices.Clone(entries), func(entry github.TreeEntry) bool {
+		return !slices.Contains(types, github.ParseFileType(entry.Mode))
+	})
 }
 
 func filterByExtension(entries []github.TreeEntry, extensions []string, ignoreCase bool) []github.TreeEntry {
@@ -142,20 +137,15 @@ func filterByExtension(entries []github.TreeEntry, extensions []string, ignoreCa
 		extensions = normalized
 	}
 
-	var filtered []github.TreeEntry
-	for _, entry := range entries {
+	return slices.DeleteFunc(slices.Clone(entries), func(entry github.TreeEntry) bool {
 		matchPath := entry.Path
 		if ignoreCase {
 			matchPath = strings.ToLower(matchPath)
 		}
 
 		ext := filepath.Ext(matchPath)
-		if ext != "" && slices.Contains(extensions, ext) {
-			filtered = append(filtered, entry)
-		}
-	}
-
-	return filtered
+		return ext == "" || !slices.Contains(extensions, ext)
+	})
 }
 
 func filterBySize(entries []github.TreeEntry, minSize, maxSize int64) []github.TreeEntry {
@@ -163,18 +153,9 @@ func filterBySize(entries []github.TreeEntry, minSize, maxSize int64) []github.T
 		return entries
 	}
 
-	filtered := make([]github.TreeEntry, 0, len(entries))
-	for _, entry := range entries {
-		if minSize > 0 && entry.Size < minSize {
-			continue
-		}
-		if maxSize > 0 && entry.Size > maxSize {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-
-	return filtered
+	return slices.DeleteFunc(slices.Clone(entries), func(entry github.TreeEntry) bool {
+		return (minSize > 0 && entry.Size < minSize) || (maxSize > 0 && entry.Size > maxSize)
+	})
 }
 
 func filterByPattern(entries []github.TreeEntry, pattern string, fullPath, ignoreCase bool) ([]github.TreeEntry, error) {
@@ -185,8 +166,7 @@ func filterByPattern(entries []github.TreeEntry, pattern string, fullPath, ignor
 		return nil, fmt.Errorf("invalid pattern %q", pattern)
 	}
 
-	var filtered []github.TreeEntry
-	for _, entry := range entries {
+	return slices.DeleteFunc(slices.Clone(entries), func(entry github.TreeEntry) bool {
 		matchPath := entry.Path
 		if !fullPath {
 			matchPath = path.Base(matchPath)
@@ -195,12 +175,8 @@ func filterByPattern(entries []github.TreeEntry, pattern string, fullPath, ignor
 			matchPath = strings.ToLower(matchPath)
 		}
 
-		if doublestar.MatchUnvalidated(pattern, matchPath) {
-			filtered = append(filtered, entry)
-		}
-	}
-
-	return filtered, nil
+		return !doublestar.MatchUnvalidated(pattern, matchPath)
+	}), nil
 }
 
 func filterByExcludes(entries []github.TreeEntry, excludes []string, fullPath, ignoreCase bool) ([]github.TreeEntry, error) {
@@ -221,8 +197,7 @@ func filterByExcludes(entries []github.TreeEntry, excludes []string, fullPath, i
 		}
 	}
 
-	var filtered []github.TreeEntry
-	for _, entry := range entries {
+	return slices.DeleteFunc(slices.Clone(entries), func(entry github.TreeEntry) bool {
 		matchPath := entry.Path
 		if !fullPath {
 			matchPath = path.Base(matchPath)
@@ -231,20 +206,13 @@ func filterByExcludes(entries []github.TreeEntry, excludes []string, fullPath, i
 			matchPath = strings.ToLower(matchPath)
 		}
 
-		excluded := false
 		for _, excludePattern := range excludes {
 			if doublestar.MatchUnvalidated(excludePattern, matchPath) {
-				excluded = true
-				break
+				return true
 			}
 		}
-
-		if !excluded {
-			filtered = append(filtered, entry)
-		}
-	}
-
-	return filtered, nil
+		return false
+	}), nil
 }
 
 func filterByDate(commits []github.FileCommitInfo, entries []github.TreeEntry, changedAfter, changedBefore *time.Time) []github.TreeEntry {
@@ -257,24 +225,12 @@ func filterByDate(commits []github.FileCommitInfo, entries []github.TreeEntry, c
 		pathDates[info.Path] = info.CommittedDate
 	}
 
-	filtered := make([]github.TreeEntry, 0, len(entries))
-	for _, entry := range entries {
+	return slices.DeleteFunc(slices.Clone(entries), func(entry github.TreeEntry) bool {
 		commitDate, ok := pathDates[entry.Path]
-		if !ok {
-			continue // No matching path, skip
-		}
-
-		if changedAfter != nil && commitDate.Before(*changedAfter) {
-			continue
-		}
-		if changedBefore != nil && commitDate.After(*changedBefore) {
-			continue
-		}
-
-		filtered = append(filtered, entry)
-	}
-
-	return filtered
+		return !ok ||
+			(changedAfter != nil && commitDate.Before(*changedAfter)) ||
+			(changedBefore != nil && commitDate.After(*changedBefore))
+	})
 }
 
 func (f *Finder) searchRepo(ctx context.Context, repo github.Repository, opts *Options) error {
