@@ -16,6 +16,8 @@ gh extension install jparise/gh-find
 
 ### From source
 
+Requires Go 1.26 or later.
+
 ```bash
 git clone https://github.com/jparise/gh-find
 cd gh-find
@@ -97,31 +99,14 @@ gh find -p "cmd/**/*.go" cli/cli     # Only .go files in cmd/
 
 #### Caching
 - `--no-cache` - Bypass cache, always fetch fresh data
-- `--cache-dir path` - Override cache directory (default: `~/.cache/gh/`)
+- `--cache-dir path` - Override the platform-specific GitHub CLI cache directory
 - `--cache-ttl duration` - Cache time-to-live (default: 24h, e.g., `1h`, `30m`)
 
 #### Output
 - `-c, --color mode` - Colorize output: `auto`, `always`, `never` (default: `auto`)
 - `--hyperlink mode` - Hyperlink output: `auto`, `always`, `never` (default: `auto`)
 
-
 ## Examples
-
-### Basic Usage
-
-```bash
-# Find all files in a repository
-gh find cli/cli
-
-# Find Go files in specific repository
-gh find "*.go" cli/cli
-
-# Search multiple repositories
-gh find "*.go" cli/cli golang/go
-
-# Search all repos under an owner (user or organization)
-gh find "*.md" torvalds
-```
 
 ### Branches, Tags, and Commits
 
@@ -195,26 +180,27 @@ gh find "*.go" cli golang/go | sort -t: -k1,1 -k2
 
 ## Using with AI Agents
 
-`gh-find` fits naturally into agent workflows (Claude Code, Cursor, and similar tools) that need to locate code across repositories without cloning them. Filters like `--type`, `--extension`, and `--exclude` keep results small and on-topic, which preserves the agent's context window, and its `repo:path` output pipes cleanly into `xargs` or `gh api` for follow-up work. Local caching (see `--cache-ttl`) makes iterative runs cheap.
+`gh-find` fits naturally into agent workflows that need to locate code across repositories without cloning them. Filters like `--type`, `--extension`, and `--exclude` keep results small and on-topic, which preserves the agent's context window. Local caching (see `--cache-ttl`) makes iterative runs cheap.
 
 For example, an agent asked to audit GitHub Actions workflows across an org can narrow the search before reading any files:
 
 ```bash
-gh find -p ".github/workflows/*.yml" myorg
+gh find -p ".github/workflows/*.{yml,yaml}" myorg
 ```
 
 ## Rate Limits
 
-The GitHub API is rate limited:
-- [REST API](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api): 5,000 requests/hour (authenticated), 60/hour (unauthenticated)
-- [GraphQL API](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api): 5,000 points/hour (authenticated), 0 (unauthenticated, disabled)
+`gh-find` uses your GitHub CLI authentication. Standard API limits are:
 
-Each search uses:
-- 1 REST request per repository
-- 1 REST request for listing an owner's repos (if needed)
+- [REST API](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api): 5,000 requests/hour
+- [GraphQL API](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api): 5,000 points/hour
 
-And when commit date filtering is enabled (`--changed-within`/`--changed-before`):
-- 1+ GraphQL requests per repository (for commit dates), batched at 100 files per request (e.g., 450 matching files = 5 GraphQL requests)
+Each uncached search uses:
+
+- For an explicit repository: 1 REST request for metadata and 1 for its recursive tree
+- For owner expansion: 1 REST request to detect the owner type, 1+ paginated listing requests, and 1 recursive tree request per selected repository
+
+When commit date filtering is enabled (`--changed-within`/`--changed-before`), each repository also uses 1 GraphQL request per batch of up to 100 matching paths (e.g., 450 matching paths in one repository = 5 requests).
 
 Local cache hits don't count against any rate limits.
 
