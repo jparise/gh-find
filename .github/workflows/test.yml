@@ -24,10 +24,9 @@ jobs:
       with:
         go-version: ${{ matrix.go }}
 
-    - name: Download dependencies
-      run: |
-        go mod download
-        go mod tidy -v
+    - name: Check module files
+      if: matrix.go == '1.26'
+      run: go mod tidy -diff
 
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
