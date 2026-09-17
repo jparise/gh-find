@@ -36,10 +36,6 @@ func (o *Output) color(code, text string) string {
 	return "\033[" + code + "m" + text + "\033[0m"
 }
 
-func makeHyperlink(url, text string) string {
-	return fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", url, text)
-}
-
 // Match writes a file match in the format: owner/repo:path or owner/repo@ref:path.
 func (o *Output) Match(repo github.Repository, path string) {
 	repoName := repo.Name
@@ -54,7 +50,7 @@ func (o *Output) Match(repo github.Repository, path string) {
 
 	if o.hyperlinks {
 		url := fmt.Sprintf("%s/blob/%s/%s", repo.URL, repo.Ref, path)
-		formatted = makeHyperlink(url, formatted)
+		formatted = fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", url, formatted)
 	}
 
 	o.mu.Lock()
