@@ -9,17 +9,7 @@ import (
 	"github.com/cli/go-gh/v2/pkg/api"
 )
 
-// OwnerType represents the type of account owner (User or Organization).
-type OwnerType string
-
-const (
-	// OwnerTypeUser represents a user account.
-	OwnerTypeUser OwnerType = "User"
-	// OwnerTypeOrganization represents an organization account.
-	OwnerTypeOrganization OwnerType = "Organization"
-
-	pageSize = 100
-)
+const pageSize = 100
 
 // ClientOptions configures the GitHub API client.
 type ClientOptions struct {
@@ -60,26 +50,25 @@ func NewClient(opts ClientOptions) (*Client, error) {
 	}, nil
 }
 
-// GetOwnerType determines if a name is a "User" or "Organization".
-func (c *Client) GetOwnerType(ctx context.Context, name string) (OwnerType, error) {
+func (c *Client) isOrganization(ctx context.Context, name string) (bool, error) {
 	var result struct {
-		Type OwnerType `json:"type"`
+		Type string `json:"type"`
 	}
 
 	endpoint := fmt.Sprintf("users/%s", name)
 	err := c.rest.DoWithContext(ctx, "GET", endpoint, nil, &result)
 	if err != nil {
-		return "", fmt.Errorf("failed to get owner type for %s: %w", name, err)
+		return false, fmt.Errorf("failed to get owner type for %s: %w", name, err)
 	}
 
-	return result.Type, nil
+	return result.Type == "Organization", nil
 }
 
 // ListRepos returns all repositories for a user or organization with pagination.
 // It detects whether the name is a user or org and uses the appropriate endpoint.
 func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([]Repository, error) {
 	// Detect if this is a user or organization
-	accountType, err := c.GetOwnerType(ctx, name)
+	isOrganization, err := c.isOrganization(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -90,13 +79,13 @@ func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([
 
 	// Determine the base endpoint based on account type
 	var baseEndpoint string
-	if accountType == OwnerTypeOrganization {
+	if isOrganization {
 		baseEndpoint = fmt.Sprintf("orgs/%s/repos", name)
 	} else {
 		baseEndpoint = fmt.Sprintf("users/%s/repos", name)
 	}
 
-	typeParam := mapRepoTypes(types, accountType)
+	typeParam := mapRepoTypes(types, isOrganization)
 
 	for {
 		endpoint := fmt.Sprintf("%s?type=%s&per_page=%d&page=%d",
@@ -152,14 +141,14 @@ func (c *Client) ListRepos(ctx context.Context, name string, types RepoTypes) ([
 
 // mapRepoTypes returns the GitHub API type parameter for filtering repositories.
 // Returns "all" if the API doesn't support filtering the requested type(s).
-func mapRepoTypes(types RepoTypes, ownerType OwnerType) string {
+func mapRepoTypes(types RepoTypes, isOrganization bool) string {
 	// Exact matches produce one selected type. Combinations fall back to "all".
 	switch {
-	case types == (RepoTypes{Sources: true}) && ownerType == OwnerTypeUser:
+	case types == (RepoTypes{Sources: true}) && !isOrganization:
 		return "owner"
-	case types == (RepoTypes{Sources: true}) && ownerType == OwnerTypeOrganization:
+	case types == (RepoTypes{Sources: true}) && isOrganization:
 		return "sources"
-	case types == (RepoTypes{Forks: true}) && ownerType == OwnerTypeOrganization:
+	case types == (RepoTypes{Forks: true}) && isOrganization:
 		return "forks"
 	default:
 		return "all"
